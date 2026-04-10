@@ -12,6 +12,7 @@ import { Bell, Navigation, Radar, MapPin } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
 import { useState, useEffect, useRef } from "react";
 import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from "react-native-maps";
+import { Platform } from "react-native";
 import * as Location from "expo-location";
 import { useGameStore } from "@/stores/gameStore";
 
@@ -135,8 +136,9 @@ export default function MapScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_GOOGLE}
-        customMapStyle={darkMapStyle}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        customMapStyle={Platform.OS === 'android' ? darkMapStyle : undefined}
+        userInterfaceStyle="dark"
         initialRegion={initialRegion}
         showsCompass={false}
         showsScale={false}

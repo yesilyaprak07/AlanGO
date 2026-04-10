@@ -12,6 +12,7 @@ import { Colors } from "@/constants/colors";
 import { useEffect, useRef } from "react";
 import { Animated } from "react-native";
 import MapView, { Polygon, PROVIDER_GOOGLE } from "react-native-maps";
+import { Platform } from "react-native";
 import { useGameStore } from "@/stores/gameStore";
 
 const { width } = Dimensions.get("window");
@@ -93,8 +94,9 @@ export default function ResultScreen() {
           <MapView
             ref={mapRef}
             style={StyleSheet.absoluteFillObject}
-            provider={PROVIDER_GOOGLE}
-            customMapStyle={darkMapStyle}
+            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+            customMapStyle={Platform.OS === 'android' ? darkMapStyle : undefined}
+            userInterfaceStyle="dark"
             scrollEnabled={false}
             zoomEnabled={false}
             rotateEnabled={false}

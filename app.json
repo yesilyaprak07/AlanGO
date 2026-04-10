@@ -16,12 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.alango.app",
-      "config": {
-        "googleMapsApiKey": "AIzaSyA_881zgavmKqolT_JYF4LNuVZvOYG9XNc"
-      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "AlanGO bölge yakalamak için konumunuza ihtiyaç duyar.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "AlanGO arka planda koşu takibi için konumunuza ihtiyaç duyar."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "AlanGO arka planda koşu takibi için konumunuza ihtiyaç duyar.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -30,7 +28,12 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.alango.app",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyA_881zgavmKqolT_JYF4LNuVZvOYG9XNc"
@@ -54,10 +57,25 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow AlanGO to use your location."
         }
+      ],
+      [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": "AIzaSyA_881zgavmKqolT_JYF4LNuVZvOYG9XNc"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "44217ab8-0a5b-4081-819c-0d49d5afc14e"
+      }
+    },
+    "owner": "caner-07"
   }
 }

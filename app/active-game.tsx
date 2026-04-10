@@ -20,6 +20,7 @@ import {
 import { Colors } from "@/constants/colors";
 import { useEffect, useState, useRef, useCallback } from "react";
 import MapView, { Marker, Polyline, Polygon, Circle, PROVIDER_GOOGLE } from "react-native-maps";
+import { Platform } from "react-native";
 import * as Location from "expo-location";
 import { useGameStore, computePolygonArea } from "@/stores/gameStore";
 
@@ -239,8 +240,9 @@ export default function ActiveGameScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_GOOGLE}
-        customMapStyle={darkMapStyle}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        customMapStyle={Platform.OS === 'android' ? darkMapStyle : undefined}
+        userInterfaceStyle="dark"
         initialRegion={region}
         showsCompass={false}
         showsScale={false}

@@ -20,5 +20,14 @@
     "production": {
       "autoIncrement": true
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "onurggbkn0727@hotmail.com",
+        "ascAppId": "6761987030",
+        "appleTeamId": "Q47QWCW2QS"
+      }
+    }
   }
 }
