@@ -4,51 +4,26 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  Dimensions,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  Clock,
-  Gauge,
-  Navigation,
-  Shield,
-  Zap,
-  Radar,
-  X,
   MapPin,
+  X,
 } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
 import { useEffect, useState, useRef, useCallback } from "react";
 import MapView, { Marker, Polyline, Polygon, Circle, PROVIDER_GOOGLE } from "react-native-maps";
-import { Platform } from "react-native";
 import * as Location from "expo-location";
 import { useGameStore, computePolygonArea } from "@/stores/gameStore";
-
-const darkMapStyle = [
-  { elementType: "geometry", stylers: [{ color: "#212121" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
-  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#757575" }] },
-  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#181818" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373737" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3c3c3c" }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry", stylers: [{ color: "#4e4e4e" }] },
-  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "transit", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3d3d3d" }] },
-];
+import { darkMapStyle } from "@/constants/mapStyles";
 
 const FALLBACK = { latitude: 36.8969, longitude: 30.7133 };
 const CLOSE_DISTANCE_THRESHOLD = 30; // meters — auto-close suggestion
 const MIN_TRAIL_POINTS = 10; // minimum points before allowing close
+const SPEED_LIMIT_KMH = 25; // max allowed speed in km/h
 
 function getDistanceMeters(
   a: { latitude: number; longitude: number },
@@ -67,28 +42,34 @@ function getDistanceMeters(
 }
 
 function formatTime(seconds: number): string {
-  const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+  const m = String(Math.floor(seconds / 60)).padStart(2, "0");
   const s = String(seconds % 60).padStart(2, "0");
-  return `${h}:${m}:${s}`;
+  return `${m}:${s}`;
 }
 
-function formatDistance(meters: number): string {
-  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
-  return `${Math.round(meters)}m`;
+function formatDistanceM(meters: number): string {
+  return Math.round(meters).toString();
 }
 
-function formatArea(m2: number): string {
-  if (m2 >= 1_000_000) return `${(m2 / 1_000_000).toFixed(2)} km²`;
-  return `${Math.round(m2).toLocaleString("tr-TR")} m²`;
+function formatAreaM2(m2: number): string {
+  return Math.round(m2).toLocaleString();
 }
+
+function formatPace(meters: number, seconds: number): string {
+  if (meters < 10 || seconds < 1) return "--:--";
+  const paceSeconds = seconds / (meters / 1000); // seconds per km
+  const m = Math.floor(paceSeconds / 60);
+  const s = Math.floor(paceSeconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function ActiveGameScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
   const { addTerritory, setLastRun, territories } = useGameStore();
 
-  const [showWarning, setShowWarning] = useState(true);
   const [currentPos, setCurrentPos] = useState<{ latitude: number; longitude: number } | null>(null);
   const [trail, setTrail] = useState<{ latitude: number; longitude: number }[]>([]);
   const startPoint = useRef<{ latitude: number; longitude: number } | null>(null);
@@ -98,7 +79,9 @@ export default function ActiveGameScreen() {
   const [closed, setClosed] = useState(false);
   const [nearStart, setNearStart] = useState(false);
   const [liveArea, setLiveArea] = useState(0);
+  const [speedViolation, setSpeedViolation] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const insets = useSafeAreaInsets();
 
   // Timer
   useEffect(() => {
@@ -106,12 +89,6 @@ export default function ActiveGameScreen() {
     const interval = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [closed]);
-
-  // Warning blink
-  useEffect(() => {
-    const interval = setInterval(() => setShowWarning((prev) => !prev), 2000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Pulse animation
   useEffect(() => {
@@ -139,8 +116,17 @@ export default function ActiveGameScreen() {
         (loc) => {
           if (!isMounted || closed) return;
           const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-          setSpeed(loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : 0);
+          const rawSpeed = loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : 0;
+          const currentKmh = rawSpeed * 3.6;
+          setSpeed(rawSpeed);
           setCurrentPos(coords);
+
+          // Speed limit check — skip point if too fast
+          if (currentKmh > SPEED_LIMIT_KMH) {
+            setSpeedViolation(true);
+            return;
+          }
+          setSpeedViolation(false);
 
           setTrail((prev) => {
             // Skip tiny movements
@@ -192,12 +178,15 @@ export default function ActiveGameScreen() {
 
   const handleCapture = useCallback(() => {
     if (closed) {
-      // Navigate to result
       router.push("/result");
       return;
     }
 
-    if (trail.length < MIN_TRAIL_POINTS) return;
+    // Not enough trail points — end without capturing
+    if (trail.length < MIN_TRAIL_POINTS) {
+      router.replace("/(tabs)/map");
+      return;
+    }
 
     // Close the polygon: add start point to end to form a loop
     const closedTrail = [...trail, trail[0]];
@@ -236,164 +225,173 @@ export default function ActiveGameScreen() {
   const canClose = trail.length >= MIN_TRAIL_POINTS;
 
   return (
-    <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFillObject}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        customMapStyle={Platform.OS === 'android' ? darkMapStyle : undefined}
-        userInterfaceStyle="dark"
-        initialRegion={region}
-        showsCompass={false}
-        showsScale={false}
-        toolbarEnabled={false}
-      >
-        {/* Previously captured territories */}
-        {territories.map((t) => (
-          <Polygon
-            key={t.id}
-            coordinates={t.polygon}
-            strokeColor="rgba(0, 240, 255, 0.5)"
-            strokeWidth={2}
-            fillColor={t.color}
-          />
-        ))}
-
-        {/* Current trail */}
-        {trail.length >= 2 && (
-          <Polyline
-            coordinates={trail}
-            strokeColor={Colors.primary}
-            strokeWidth={4}
-          />
-        )}
-
-        {/* Closed polygon fill */}
-        {closed && trail.length >= 3 && (
-          <Polygon
-            coordinates={trail}
-            strokeColor={Colors.primary}
-            strokeWidth={3}
-            fillColor="rgba(0, 240, 255, 0.3)"
-          />
-        )}
-
-        {/* Start point marker with close radius circle */}
-        {startPoint.current && !closed && trail.length >= 3 && (
-          <>
-            <Circle
-              center={startPoint.current}
-              radius={CLOSE_DISTANCE_THRESHOLD}
-              strokeColor="rgba(0, 240, 255, 0.3)"
-              fillColor="rgba(0, 240, 255, 0.08)"
-              strokeWidth={1}
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }]}>
+      {/* Map Area */}
+      <View style={styles.mapContainer}>
+        <MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFillObject}
+          provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+          customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
+          initialRegion={region}
+          showsCompass={false}
+          showsScale={false}
+          toolbarEnabled={false}
+        >
+          {territories.map((t) => (
+            <Polygon
+              key={t.id}
+              coordinates={t.polygon}
+              strokeColor="rgba(0, 240, 255, 0.5)"
+              strokeWidth={2}
+              fillColor={t.color}
             />
-            <Marker coordinate={startPoint.current} anchor={{ x: 0.5, y: 0.5 }}>
-              <View style={styles.startMarker}>
-                <MapPin size={16} color={Colors.primary} />
+          ))}
+
+          {trail.length >= 2 && (
+            <Polyline
+              coordinates={trail}
+              strokeColor={Colors.primary}
+              strokeWidth={4}
+            />
+          )}
+
+          {closed && trail.length >= 3 && (
+            <Polygon
+              coordinates={trail}
+              strokeColor={Colors.primary}
+              strokeWidth={3}
+              fillColor="rgba(0, 240, 255, 0.3)"
+            />
+          )}
+
+          {startPoint.current && !closed && trail.length >= 3 && (
+            <>
+              <Circle
+                center={startPoint.current}
+                radius={CLOSE_DISTANCE_THRESHOLD}
+                strokeColor="rgba(0, 240, 255, 0.3)"
+                fillColor="rgba(0, 240, 255, 0.08)"
+                strokeWidth={1}
+              />
+              <Marker coordinate={startPoint.current} anchor={{ x: 0.5, y: 0.5 }}>
+                <View style={styles.startMarker}>
+                  <MapPin size={16} color={Colors.primary} />
+                </View>
+              </Marker>
+            </>
+          )}
+
+          {currentPos && (
+            <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }}>
+              <View style={styles.playerMarkerContainer}>
+                <Animated.View
+                  style={[
+                    styles.playerPulse,
+                    { transform: [{ scale: pulseAnim }], opacity: pulseOpacity },
+                  ]}
+                />
+                <View style={styles.playerDotOuter}>
+                  <View style={styles.playerDotInner} />
+                </View>
               </View>
             </Marker>
-          </>
+          )}
+        </MapView>
+
+        {/* Close button */}
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+            <X size={20} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Near-start hint */}
+        {nearStart && !closed && (
+          <View style={styles.nearStartBadge}>
+            <MapPin size={14} color={Colors.primary} />
+            <Text style={styles.nearStartText}>Başlangıca yakınsın!</Text>
+          </View>
         )}
 
-        {/* Player position */}
-        {currentPos && (
-          <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.playerMarkerContainer}>
-              <Animated.View
-                style={[
-                  styles.playerPulse,
-                  { transform: [{ scale: pulseAnim }], opacity: pulseOpacity },
-                ]}
-              />
-              <View style={styles.playerDotOuter}>
-                <View style={styles.playerDotInner} />
-              </View>
-            </View>
-          </Marker>
+        {/* Speed violation warning */}
+        {speedViolation && !closed && (
+          <View style={styles.speedWarningBadge}>
+            <Text style={styles.speedWarningText}>Hız limiti aşıldı! (maks {SPEED_LIMIT_KMH} km/s)</Text>
+          </View>
         )}
-      </MapView>
+      </View>
 
-      {/* Top HUD */}
-      <SafeAreaView style={styles.topBar} edges={["top"]}>
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-          <X size={20} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.hudContainer}>
-          <View style={styles.hudItem}>
-            <Clock size={14} color={Colors.textSecondary} />
-            <Text style={styles.hudText}>{formatTime(elapsed)}</Text>
-          </View>
-          <View style={styles.hudDivider} />
-          <View style={styles.hudItem}>
-            <Gauge size={14} color={Colors.textSecondary} />
-            <Text style={styles.hudText}>{speedKmh} km/s</Text>
-          </View>
-          <View style={styles.hudDivider} />
-          <View style={styles.hudItem}>
-            <Navigation size={14} color={Colors.textSecondary} />
-            <Text style={styles.hudText}>{formatDistance(totalDistance)}</Text>
+      {/* Stats Panel */}
+      <View style={styles.statsPanel}>
+        {/* GPS indicator + status */}
+        <View style={styles.statusRow}>
+          <View style={styles.gpsIndicator}>
+            <View style={styles.gpsDot} />
+            <Text style={styles.gpsText}>GPS</Text>
           </View>
         </View>
-      </SafeAreaView>
 
-      {/* Live area preview */}
-      {!closed && trail.length >= 3 && (
-        <View style={styles.areaBadge}>
-          <Text style={styles.areaBadgeText}>{formatArea(liveArea)}</Text>
+        {/* Main area display */}
+        <View style={styles.mainStat}>
+          <Text style={styles.mainValue}>{formatDistanceM(totalDistance)}</Text>
+          <Text style={styles.mainUnit}>m</Text>
         </View>
-      )}
+        <Text style={styles.captureLabel}>
+          {closed ? "Alan Kapatıldı" : "Yakalama Devam Ediyor"}
+        </Text>
 
-      {/* Near-start hint */}
-      {nearStart && !closed && (
-        <View style={styles.nearStartBadge}>
-          <MapPin size={14} color={Colors.primary} />
-          <Text style={styles.nearStartText}>Başlangıç noktasına yakınsın!</Text>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{formatAreaM2(liveArea)}</Text>
+            <Text style={styles.statUnit}>m²</Text>
+            <Text style={styles.statLabel}>Alan</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{Math.round(totalDistance / 0.75)}</Text>
+            <Text style={styles.statUnit}> </Text>
+            <Text style={styles.statLabel}>Adım</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{formatTime(elapsed)}</Text>
+            <Text style={styles.statUnit}> </Text>
+            <Text style={styles.statLabel}>Süre</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{formatPace(totalDistance, elapsed)}</Text>
+            <Text style={styles.statUnit}>/km</Text>
+            <Text style={styles.statLabel}>Tempo</Text>
+          </View>
         </View>
-      )}
 
-      {/* Warning Badge */}
-      {showWarning && !nearStart && (
-        <View style={styles.warningBadge}>
-          <View style={styles.pulseDot} />
-          <Text style={styles.warningText}>Dikkat! Rakip Yakında</Text>
-        </View>
-      )}
-
-      {/* Bottom Panel */}
-      <SafeAreaView style={styles.bottomPanel} edges={["bottom"]}>
-        <TouchableOpacity
-          style={[
-            styles.captureButton,
-            closed && styles.capturedButton,
-            nearStart && !closed && styles.nearStartButton,
-            !canClose && !closed && styles.disabledButton,
-          ]}
-          onPress={handleCapture}
-          disabled={!canClose && !closed}
-        >
-          <Text style={styles.captureText}>
-            {closed ? "Sonuçları Gör" : nearStart ? "Alanı Kapat!" : "Alan Kapat"}
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.powerUpRow}>
-          <TouchableOpacity style={styles.powerUpButton}>
-            <Shield size={24} color={Colors.primary} />
+        {/* Action button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              closed && styles.resultButton,
+              nearStart && !closed && styles.closeAreaButton,
+              !canClose && !closed && styles.endEarlyButton,
+            ]}
+            onPress={handleCapture}
+          >
+            <Text style={[styles.actionButtonText, closed && styles.resultButtonText]}>
+              {closed ? "Sonuçları Gör" : nearStart ? "Alanı Fethet!" : "Alanı Fethet!"}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.powerUpButton}>
-            <Zap size={24} color={Colors.warning} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.powerUpButton}>
-            <Radar size={24} color={Colors.success} />
-          </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  mapContainer: { flex: 2, position: "relative" },
   startMarker: {
     width: 32,
     height: 32,
@@ -438,9 +436,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
   },
@@ -448,50 +443,20 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: "rgba(26, 29, 32, 0.9)",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
   },
-  hudContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(26, 29, 32, 0.95)",
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-  },
-  hudItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  hudText: { fontSize: 13, fontWeight: "600", color: Colors.textPrimary },
-  hudDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: Colors.surfaceBorder,
-    marginHorizontal: 12,
-  },
-  areaBadge: {
-    position: "absolute",
-    top: 100,
-    left: 16,
-    backgroundColor: "rgba(26, 29, 32, 0.95)",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  areaBadgeText: { fontSize: 15, fontWeight: "700", color: Colors.primary },
   nearStartBadge: {
     position: "absolute",
-    top: 100,
-    right: 16,
+    bottom: 16,
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(0, 240, 255, 0.15)",
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
     gap: 8,
@@ -499,63 +464,138 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   nearStartText: { fontSize: 13, fontWeight: "600", color: Colors.primary },
-  warningBadge: {
+  speedWarningBadge: {
     position: "absolute",
-    top: 100,
-    right: 16,
+    bottom: 16,
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.danger,
-    paddingHorizontal: 14,
+    backgroundColor: "rgba(255, 59, 48, 0.2)",
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.danger,
   },
-  pulseDot: {
+  speedWarningText: { fontSize: 13, fontWeight: "600", color: Colors.danger },
+
+  /* Stats Panel */
+  statsPanel: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+  },
+  statusRow: {
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  gpsIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  gpsDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.success,
   },
-  warningText: { fontSize: 13, fontWeight: "600", color: Colors.textPrimary },
-  bottomPanel: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
+  gpsText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textSecondary,
+    letterSpacing: 1,
   },
-  captureButton: {
+  mainStat: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  mainValue: {
+    fontSize: 40,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  mainUnit: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    marginLeft: 4,
+  },
+  captureLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    marginBottom: 8,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  statUnit: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    marginTop: -2,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: Colors.surfaceBorder,
+  },
+  buttonContainer: { marginTop: "auto" },
+  actionButton: {
     backgroundColor: Colors.surface,
-    height: 64,
-    borderRadius: 16,
+    height: 48,
+    borderRadius: 28,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
+    marginBottom: 8,
   },
-  capturedButton: {
+  resultButton: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
-  nearStartButton: {
+  closeAreaButton: {
     backgroundColor: Colors.success,
     borderColor: Colors.success,
   },
-  disabledButton: {
-    opacity: 0.5,
+  endEarlyButton: {
+    backgroundColor: "rgba(255, 59, 48, 0.15)",
+    borderColor: Colors.danger,
   },
-  captureText: { fontSize: 18, fontWeight: "bold", color: Colors.textPrimary },
-  powerUpRow: { flexDirection: "row", justifyContent: "center", gap: 16 },
-  powerUpButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.surface,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+  actionButtonText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    letterSpacing: 0.5,
+  },
+  resultButtonText: {
+    color: Colors.background,
   },
 });

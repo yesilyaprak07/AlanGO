@@ -5,46 +5,26 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Bell, Navigation, Radar, MapPin } from "lucide-react-native";
+import { Bell, Navigation, MapPin } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
 import { useState, useEffect, useRef } from "react";
 import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from "react-native-maps";
-import { Platform } from "react-native";
 import * as Location from "expo-location";
 import { useGameStore } from "@/stores/gameStore";
+import { darkMapStyle } from "@/constants/mapStyles";
 
 const { height } = Dimensions.get("window");
-
-const darkMapStyle = [
-  { elementType: "geometry", stylers: [{ color: "#212121" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
-  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#757575" }] },
-  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#181818" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373737" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3c3c3c" }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry", stylers: [{ color: "#4e4e4e" }] },
-  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "transit", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3d3d3d" }] },
-];
 
 export default function MapScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
   const [isGameActive] = useState(false);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [cityName, setCityName] = useState<string>("...");
   const { territories, totalArea, loadTerritories } = useGameStore();
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -71,11 +51,20 @@ export default function MapScreen() {
           if (!isMounted) return;
           const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
           setLocation((prev) => {
-            if (!prev && mapRef.current) {
-              mapRef.current.animateToRegion(
-                { ...coords, latitudeDelta: 0.005, longitudeDelta: 0.005 },
-                600
-              );
+            if (!prev) {
+              if (mapRef.current) {
+                mapRef.current.animateToRegion(
+                  { ...coords, latitudeDelta: 0.005, longitudeDelta: 0.005 },
+                  600
+                );
+              }
+              // Reverse geocode only on first fix
+              Location.reverseGeocodeAsync(coords).then((results) => {
+                if (results.length > 0) {
+                  const r = results[0];
+                  setCityName(r.district ?? r.city ?? r.region ?? "");
+                }
+              }).catch(() => {});
             }
             return coords;
           });
@@ -136,9 +125,8 @@ export default function MapScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        customMapStyle={Platform.OS === 'android' ? darkMapStyle : undefined}
-        userInterfaceStyle="dark"
+        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+        customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
         initialRegion={initialRegion}
         showsCompass={false}
         showsScale={false}
@@ -178,12 +166,12 @@ export default function MapScreen() {
 
       {/* Top Bar */}
       <SafeAreaView style={styles.topBar} edges={["top"]}>
-        <TouchableOpacity style={styles.avatar}>
+        <TouchableOpacity style={styles.avatar} onPress={() => router.push("/(tabs)/profile")}>
           <Text style={styles.avatarText}>A</Text>
         </TouchableOpacity>
         <View style={styles.locationBadge}>
           <MapPin size={14} color={Colors.primary} />
-          <Text style={styles.locationText}>Antalya</Text>
+          <Text style={styles.locationText}>{cityName}</Text>
         </View>
         <TouchableOpacity style={styles.notificationButton}>
           <Bell size={22} color={Colors.textPrimary} />
@@ -201,9 +189,6 @@ export default function MapScreen() {
         >
           <Navigation size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatingButton}>
-          <Radar size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
       </View>
 
       {/* Bottom Panel */}
@@ -211,9 +196,7 @@ export default function MapScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>
-              {totalArea >= 1_000_000
-                ? `${(totalArea / 1_000_000).toFixed(2)} km²`
-                : `${Math.round(totalArea).toLocaleString()} m²`}
+              {`${Math.round(totalArea).toLocaleString()} m²`}
             </Text>
             <Text style={styles.statLabel}>Alan</Text>
           </View>

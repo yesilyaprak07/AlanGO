@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -17,9 +18,16 @@ export default function SplashScreen() {
       ])
     ).start();
 
-    Animated.timing(progressAnim, { toValue: 1, duration: 2500, useNativeDriver: false }).start();
+    Animated.timing(progressAnim, { toValue: 1, duration: 2500, useNativeDriver: true }).start();
 
-    const timer = setTimeout(() => { router.replace("/(onboarding)/step1"); }, 3000);
+    const timer = setTimeout(async () => {
+      const done = await AsyncStorage.getItem("alango_onboarding_done");
+      if (done === "true") {
+        router.replace("/(tabs)/map");
+      } else {
+        router.replace("/(onboarding)/step1");
+      }
+    }, 3000);
     return () => clearTimeout(timer);
   }, [router, glowAnim, progressAnim]);
 
@@ -36,7 +44,7 @@ export default function SplashScreen() {
       </View>
       <View style={styles.loadingContainer}>
         <View style={styles.loadingTrack}>
-          <Animated.View style={[styles.loadingBar, { width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
+          <Animated.View style={[styles.loadingBar, { transform: [{ scaleX: progressAnim }] }]} />
         </View>
       </View>
     </SafeAreaView>
@@ -53,5 +61,5 @@ const styles = StyleSheet.create({
   tagline: { fontSize: 16, color: Colors.textSecondary, marginTop: 8 },
   loadingContainer: { paddingHorizontal: 60, paddingBottom: 60 },
   loadingTrack: { height: 2, backgroundColor: Colors.surfaceBorder, borderRadius: 1, overflow: "hidden" },
-  loadingBar: { height: "100%", backgroundColor: Colors.primary },
+  loadingBar: { height: "100%", width: "100%", backgroundColor: Colors.primary, transformOrigin: "left" },
 });

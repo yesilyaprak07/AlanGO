@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Check } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function OnboardingStep3() {
   const router = useRouter();
@@ -30,7 +31,8 @@ export default function OnboardingStep3() {
       }),
     ]).start();
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      await AsyncStorage.setItem("alango_onboarding_done", "true");
       router.replace("/(auth)/signin");
     }, 2500);
 

@@ -4,6 +4,8 @@
   StyleSheet,
   TouchableOpacity,
   Dimensions,
+  Platform,
+  Share,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -12,19 +14,10 @@ import { Colors } from "@/constants/colors";
 import { useEffect, useRef } from "react";
 import { Animated } from "react-native";
 import MapView, { Polygon, PROVIDER_GOOGLE } from "react-native-maps";
-import { Platform } from "react-native";
 import { useGameStore } from "@/stores/gameStore";
+import { darkMapStyle } from "@/constants/mapStyles";
 
 const { width } = Dimensions.get("window");
-
-const darkMapStyle = [
-  { elementType: "geometry", stylers: [{ color: "#212121" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] },
-];
 
 function formatTime(seconds: number): string {
   const m = String(Math.floor(seconds / 60)).padStart(2, "0");
@@ -38,7 +31,6 @@ function formatDistance(meters: number): string {
 }
 
 function formatArea(m2: number): string {
-  if (m2 >= 1_000_000) return `${(m2 / 1_000_000).toFixed(2)} km²`;
   return `${Math.round(m2).toLocaleString("tr-TR")} m²`;
 }
 
@@ -82,6 +74,14 @@ export default function ResultScreen() {
     }
   }, [polygon]);
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `AlanGO'da ${formatArea(area)} alan fethettim! Mesafe: ${formatDistance(distance)}, Süre: ${formatTime(duration)} (+${xp} XP) 🗺️`,
+      });
+    } catch {}
+  };
+
   const handleContinue = () => {
     router.replace("/(tabs)/map");
   };
@@ -94,9 +94,8 @@ export default function ResultScreen() {
           <MapView
             ref={mapRef}
             style={StyleSheet.absoluteFillObject}
-            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-            customMapStyle={Platform.OS === 'android' ? darkMapStyle : undefined}
-            userInterfaceStyle="dark"
+            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+            customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
             scrollEnabled={false}
             zoomEnabled={false}
             rotateEnabled={false}
@@ -163,7 +162,7 @@ export default function ResultScreen() {
 
         {/* Action Buttons */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.shareButton}>
+          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
             <Share2 size={20} color={Colors.primary} />
             <Text style={styles.shareText}>Paylaş</Text>
           </TouchableOpacity>

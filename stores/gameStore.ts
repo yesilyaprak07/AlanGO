@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import polygonClipping from "polygon-clipping";
 
 export interface LatLng {
   latitude: number;
@@ -36,6 +37,76 @@ export function computePolygonArea(polygon: LatLng[]): number {
   return Math.abs(area) / 2;
 }
 
+/** Convert LatLng[] to polygon-clipping Ring format [lng, lat][] */
+function toRing(polygon: LatLng[]): [number, number][] {
+  const ring = polygon.map((p): [number, number] => [p.longitude, p.latitude]);
+  // Ensure ring is closed
+  if (ring.length > 0) {
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      ring.push([first[0], first[1]]);
+    }
+  }
+  return ring;
+}
+
+/** Convert polygon-clipping Ring back to LatLng[] */
+function fromRing(ring: [number, number][]): LatLng[] {
+  // Remove closing point if present
+  const points = ring.length > 1 &&
+    ring[0][0] === ring[ring.length - 1][0] &&
+    ring[0][1] === ring[ring.length - 1][1]
+    ? ring.slice(0, -1)
+    : ring;
+  return points.map((p) => ({ latitude: p[1], longitude: p[0] }));
+}
+
+/** Merge overlapping territories, return merged list */
+function mergeOverlapping(territories: Territory[], newTerritory: Territory): Territory[] {
+  const newRing = toRing(newTerritory.polygon);
+  let mergedPolygon: [number, number][][] = [newRing];
+  const nonOverlapping: Territory[] = [];
+  let totalDistance = newTerritory.distance;
+  let totalDuration = newTerritory.duration;
+  let earliestCreatedAt = newTerritory.createdAt;
+
+  for (const t of territories) {
+    const existingRing = toRing(t.polygon);
+    try {
+      const result = polygonClipping.intersection([mergedPolygon[0]], [existingRing]);
+      if (result.length > 0) {
+        // Overlaps — union them
+        const unionResult = polygonClipping.union([mergedPolygon[0]], [existingRing]);
+        if (unionResult.length > 0 && unionResult[0].length > 0) {
+          mergedPolygon = [unionResult[0][0]]; // Take outer ring of first polygon
+        }
+        totalDistance += t.distance;
+        totalDuration += t.duration;
+        earliestCreatedAt = Math.min(earliestCreatedAt, t.createdAt);
+      } else {
+        nonOverlapping.push(t);
+      }
+    } catch {
+      // If clipping fails, keep separate
+      nonOverlapping.push(t);
+    }
+  }
+
+  const mergedLatLng = fromRing(mergedPolygon[0]);
+  const mergedTerritory: Territory = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    polygon: mergedLatLng,
+    area: computePolygonArea(mergedLatLng),
+    distance: totalDistance,
+    duration: totalDuration,
+    createdAt: earliestCreatedAt,
+    color: "rgba(0, 240, 255, 0.25)",
+  };
+
+  return [...nonOverlapping, mergedTerritory];
+}
+
 const STORAGE_KEY = "alango_territories";
 
 interface GameState {
@@ -66,7 +137,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       createdAt: Date.now(),
       color: "rgba(0, 240, 255, 0.25)",
     };
-    const updated = [...get().territories, territory];
+    const updated = mergeOverlapping(get().territories, territory);
     const totalArea = updated.reduce((s, ter) => s + ter.area, 0);
     set({ territories: updated, totalArea });
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
