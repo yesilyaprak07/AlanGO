@@ -5,20 +5,34 @@ import { Colors } from "@/constants/colors";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Pentagon shape as a View composition
+function PentagonIcon({ size = 80 }: { size?: number }) {
+  return (
+    <View style={[styles.pentagonOuter, { width: size, height: size }]}>
+      <View style={styles.pentagonInner}>
+        <View style={styles.pentagonDot} />
+      </View>
+    </View>
+  );
+}
+
 export default function SplashScreen() {
   const router = useRouter();
-  const glowAnim = useRef(new Animated.Value(0.5)).current;
+  const glowAnim = useRef(new Animated.Value(0.6)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+
     Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.5, duration: 1500, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.6, duration: 1800, useNativeDriver: true }),
       ])
     ).start();
 
-    Animated.timing(progressAnim, { toValue: 1, duration: 2500, useNativeDriver: true }).start();
+    Animated.timing(progressAnim, { toValue: 1, duration: 2600, useNativeDriver: false }).start();
 
     const timer = setTimeout(async () => {
       const done = await AsyncStorage.getItem("alango_onboarding_done");
@@ -27,39 +41,191 @@ export default function SplashScreen() {
       } else {
         router.replace("/(onboarding)/step1");
       }
-    }, 3000);
+    }, 3200);
     return () => clearTimeout(timer);
-  }, [router, glowAnim, progressAnim]);
+  }, [router, glowAnim, progressAnim, fadeAnim]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Animated.View style={[styles.logoCircle, { opacity: glowAnim, shadowOpacity: glowAnim }]}>
-          <View style={styles.innerCircle}>
-            <Text style={styles.logoText}>A</Text>
+      {/* Background glow blobs */}
+      <Animated.View style={[styles.glowBlob1, { opacity: glowAnim }]} />
+      <Animated.View style={[styles.glowBlob2, { opacity: glowAnim }]} />
+
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        {/* App icon */}
+        <View style={styles.iconWrapper}>
+          <Animated.View style={[styles.iconGlow, { opacity: glowAnim }]} />
+          <View style={styles.iconContainer}>
+            <View style={styles.iconBg}>
+              <PentagonIcon size={52} />
+            </View>
           </View>
-        </Animated.View>
-        <Text style={styles.title}>AlanGO</Text>
-        <Text style={styles.tagline}>Mahallenin sahibi ol</Text>
-      </View>
-      <View style={styles.loadingContainer}>
-        <View style={styles.loadingTrack}>
-          <Animated.View style={[styles.loadingBar, { transform: [{ scaleX: progressAnim }] }]} />
         </View>
+
+        {/* Title */}
+        <View style={styles.titleRow}>
+          <Text style={styles.titleAlan}>Alan</Text>
+          <Text style={styles.titleGO}>GO</Text>
+        </View>
+
+        {/* Tagline */}
+        <Text style={styles.tagline}>ELE GEÇİR · SAVUN · HÜKMET</Text>
+      </Animated.View>
+
+      {/* Bottom loading section */}
+      <View style={styles.loadingSection}>
+        <View style={styles.progressTrack}>
+          <Animated.View
+            style={[
+              styles.progressBar,
+              {
+                width: progressAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ["0%", "100%"],
+                }),
+              },
+            ]}
+          />
+        </View>
+        <Text style={styles.loadingText}>BAĞLANIYOR</Text>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { flex: 1, justifyContent: "center", alignItems: "center" },
-  logoCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(0, 240, 255, 0.2)", justifyContent: "center", alignItems: "center", shadowColor: Colors.primary, shadowOffset: { width: 0, height: 0 }, shadowRadius: 30, elevation: 20 },
-  innerCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center" },
-  logoText: { fontSize: 40, fontWeight: "bold", color: Colors.background },
-  title: { fontSize: 32, fontWeight: "bold", color: Colors.textPrimary, marginTop: 24 },
-  tagline: { fontSize: 16, color: Colors.textSecondary, marginTop: 8 },
-  loadingContainer: { paddingHorizontal: 60, paddingBottom: 60 },
-  loadingTrack: { height: 2, backgroundColor: Colors.surfaceBorder, borderRadius: 1, overflow: "hidden" },
-  loadingBar: { height: "100%", width: "100%", backgroundColor: Colors.primary, transformOrigin: "left" },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  glowBlob1: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: Colors.cyan,
+    opacity: 0.06,
+    top: "15%",
+    left: "-20%",
+  },
+  glowBlob2: {
+    position: "absolute",
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: Colors.purple,
+    opacity: 0.08,
+    bottom: "20%",
+    right: "-15%",
+  },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  iconWrapper: {
+    position: "relative",
+    marginBottom: 32,
+  },
+  iconGlow: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: Colors.cyan,
+    opacity: 0.15,
+    top: -20,
+    left: -20,
+  },
+  iconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 28,
+    backgroundColor: "rgba(91, 200, 224, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(91, 200, 224, 0.3)",
+  },
+  iconBg: {
+    width: 88,
+    height: 88,
+    borderRadius: 20,
+    backgroundColor: "rgba(91, 200, 224, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // Pentagon approximation
+  pentagonOuter: {
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: Colors.cyan,
+    borderRadius: 8,
+    transform: [{ rotate: "0deg" }],
+  },
+  pentagonInner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Colors.cyan,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pentagonDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.cyan,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginBottom: 16,
+  },
+  titleAlan: {
+    fontSize: 52,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    letterSpacing: -1,
+  },
+  titleGO: {
+    fontSize: 52,
+    fontWeight: "800",
+    color: Colors.cyan,
+    letterSpacing: -1,
+  },
+  tagline: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textMuted,
+    letterSpacing: 3,
+  },
+  loadingSection: {
+    width: "60%",
+    alignItems: "center",
+    paddingBottom: 56,
+  },
+  progressTrack: {
+    width: "100%",
+    height: 2,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 1,
+    overflow: "hidden",
+    marginBottom: 14,
+  },
+  progressBar: {
+    height: "100%",
+    backgroundColor: Colors.cyan,
+    borderRadius: 1,
+  },
+  loadingText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.textMuted,
+    letterSpacing: 3,
+  },
 });

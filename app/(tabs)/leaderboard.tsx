@@ -1,252 +1,243 @@
-﻿import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Crown, ChevronRight } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
 import { useState } from "react";
-const TABS = [
-  { id: "local", label: "Antalya" },
-  { id: "country", label: "Türkiye" },
-  { id: "global", label: "Global" },
+
+type Tab = "mahalle" | "sehir" | "ulke";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "mahalle", label: "Mahalle" },
+  { key: "sehir", label: "Şehir" },
+  { key: "ulke", label: "Ülke" },
 ];
-const PODIUM_DATA = [
-  { rank: 2, name: "Viking", area: "45.2K m²", color: Colors.silver },
-  { rank: 1, name: "KaraKurt", area: "78.5K m²", color: Colors.gold },
-  { rank: 3, name: "Savaşçı", area: "38.9K m²", color: Colors.bronze },
+
+const PODIUM = [
+  { rank: 2, initials: "ZT", name: "Zehra.T", title: "GENERAL", area: "76.8 km²", color: Colors.silver },
+  { rank: 1, initials: "MK", name: "Mert_K", title: "HÜKÜMDAR", area: "84.2 km²", color: Colors.gold },
+  { rank: 3, initials: "B6", name: "Burak61", title: "GENERAL", area: "71.4 km²", color: Colors.bronze },
 ];
-const LEADERBOARD_DATA = [
-  { rank: 4, name: "PlajKralı", area: "32.1K m²", isUser: false },
-  { rank: 5, name: "Koşucu42", area: "28.7K m²", isUser: false },
-  { rank: 6, name: "AlanTitan", area: "24.5K m²", isUser: true },
-  { rank: 7, name: "YeniBie", area: "21.3K m²", isUser: false },
-  { rank: 8, name: "GPSMaster", area: "19.8K m²", isUser: false },
-  { rank: 9, name: "TerritoryX", area: "17.2K m²", isUser: false },
-  { rank: 10, name: "Walker99", area: "15.6K m²", isUser: false },
+
+const LIST = [
+  { rank: 4, initials: "EO", name: "Eylül_06", area: "68.1 km²", trend: "+2", isUser: false },
+  { rank: 5, initials: "AY", name: "Sen", area: "62.4 km²", trend: "+3", isUser: true },
+  { rank: 6, initials: "K9", name: "Koray99", area: "58.7 km²", trend: "-1", isUser: false },
+  { rank: 7, initials: "GP", name: "GPSMaster", area: "54.2 km²", trend: "0", isUser: false },
+  { rank: 8, initials: "TK", name: "TurkKral", area: "49.8 km²", trend: "+4", isUser: false },
 ];
+
+function HexAvatar({ initials, color, size = 52 }: { initials: string; color: string; size?: number }) {
+  return (
+    <View style={[styles.hexAvatar, { width: size, height: size, borderRadius: size * 0.22, borderColor: color }]}>
+      <Text style={[styles.hexAvatarText, { color, fontSize: size * 0.32 }]}>{initials}</Text>
+    </View>
+  );
+}
+
 export default function LeaderboardScreen() {
-  const [activeTab, setActiveTab] = useState("local");
-  const getRankColor = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return Colors.gold;
-      case 2:
-        return Colors.silver;
-      case 3:
-        return Colors.bronze;
-      default:
-        return Colors.textSecondary;
-    }
-  };
+  const [activeTab, setActiveTab] = useState<Tab>("sehir");
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Liderlik</Text>
-        <TouchableOpacity style={styles.filterButton}>
-          <Text style={styles.filterText}>Bu Hafta</Text>
-          <ChevronRight size={16} color={Colors.textSecondary} />
-        </TouchableOpacity>
+        <View>
+          <View style={styles.seasonRow}>
+            <Text style={styles.seasonLabel}>SEZON 4</Text>
+            <View style={styles.seasonTimer}>
+              <View style={styles.timerDot} />
+              <Text style={styles.timerText}>12 GÜN</Text>
+            </View>
+          </View>
+          <Text style={styles.title}>Liderlik</Text>
+        </View>
+        <View style={styles.trophyBadge}>
+          <Text style={styles.trophyEmoji}>🏆</Text>
+        </View>
       </View>
+
       {/* Tabs */}
       <View style={styles.tabs}>
         {TABS.map((tab) => (
           <TouchableOpacity
-            key={tab.id}
-            style={[styles.tab, activeTab === tab.id && styles.activeTab]}
-            onPress={() => setActiveTab(tab.id)}
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            onPress={() => setActiveTab(tab.key)}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab.id && styles.activeTabText,
-              ]}
-            >
+            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Podium */}
-        <View style={styles.podiumContainer}>
-          {PODIUM_DATA.map((player, index) => (
-            <View
-              key={player.rank}
-              style={[
-                styles.podiumItem,
-                index === 1 && styles.podiumCenter,
-                index === 0 && styles.podiumLeft,
-                index === 2 && styles.podiumRight,
-              ]}
-            >
-              <View
-                style={[
-                  styles.podiumAvatar,
-                  { borderColor: player.color },
-                  index === 1 && styles.podiumAvatarCenter,
-                ]}
-              >
-                <Text style={styles.podiumInitial}>
-                  {player.name[0]}
-                </Text>
-                {index === 1 && (
-                  <View style={styles.crownBadge}>
-                    <Crown
-                      size={14}
-                      color={Colors.gold}
-                      fill={Colors.gold}
-                    />
-                  </View>
-                )}
-              </View>
-              <Text style={styles.podiumName}>{player.name}</Text>
-              <Text style={[styles.podiumArea, { color: player.color }]}>
-                {player.area}
-              </Text>
-              <View
-                style={[
-                  styles.podiumBar,
-                  {
-                    backgroundColor: player.color,
-                    height: index === 1 ? 80 : index === 0 ? 60 : 50,
-                  },
-                ]}
-              >
-                <Text style={styles.podiumRank}>#{player.rank}</Text>
-              </View>
+        <View style={styles.podiumWrapper}>
+          {/* Left (rank 2) */}
+          <View style={[styles.podiumItem, styles.podiumSide]}>
+            <HexAvatar initials={PODIUM[0].initials} color={PODIUM[0].color} size={56} />
+            <Text style={styles.podiumName}>{PODIUM[0].name}</Text>
+            <Text style={[styles.podiumTitle, { color: PODIUM[0].color }]}>{PODIUM[0].title}</Text>
+            <Text style={styles.podiumArea}>{PODIUM[0].area}</Text>
+            <View style={[styles.podiumBar, { height: 60, backgroundColor: PODIUM[0].color }]}>
+              <Text style={styles.podiumRankNum}>2</Text>
             </View>
-          ))}
+          </View>
+
+          {/* Center (rank 1) */}
+          <View style={[styles.podiumItem, styles.podiumCenter]}>
+            <View style={styles.crownAbove}>
+              <Text style={styles.crownEmoji}>👑</Text>
+            </View>
+            <HexAvatar initials={PODIUM[1].initials} color={PODIUM[1].color} size={72} />
+            <Text style={[styles.podiumName, { fontSize: 15 }]}>{PODIUM[1].name}</Text>
+            <Text style={[styles.podiumTitle, { color: PODIUM[1].color }]}>{PODIUM[1].title}</Text>
+            <Text style={[styles.podiumArea, { color: PODIUM[1].color }]}>{PODIUM[1].area}</Text>
+            <View style={[styles.podiumBar, { height: 80, backgroundColor: PODIUM[1].color }]}>
+              <Text style={styles.podiumRankNum}>1</Text>
+            </View>
+          </View>
+
+          {/* Right (rank 3) */}
+          <View style={[styles.podiumItem, styles.podiumSide]}>
+            <HexAvatar initials={PODIUM[2].initials} color={PODIUM[2].color} size={56} />
+            <Text style={styles.podiumName}>{PODIUM[2].name}</Text>
+            <Text style={[styles.podiumTitle, { color: PODIUM[2].color }]}>{PODIUM[2].title}</Text>
+            <Text style={styles.podiumArea}>{PODIUM[2].area}</Text>
+            <View style={[styles.podiumBar, { height: 50, backgroundColor: PODIUM[2].color }]}>
+              <Text style={styles.podiumRankNum}>3</Text>
+            </View>
+          </View>
         </View>
+
+        {/* Season reward */}
+        <View style={styles.rewardCard}>
+          <Text style={styles.rewardIcon}>🏆</Text>
+          <View style={styles.rewardInfo}>
+            <Text style={styles.rewardTitle}>SEZON ÖDÜLÜ</Text>
+            <Text style={styles.rewardDesc}>Top 100 → Altın "Hükümdar" rozeti + 5.000 altın</Text>
+          </View>
+          <View style={styles.rewardRank}>
+            <Text style={styles.rewardRankLabel}>SIRAN</Text>
+            <Text style={styles.rewardRankValue}>#5</Text>
+          </View>
+        </View>
+
         {/* List */}
         <View style={styles.listContainer}>
-          {LEADERBOARD_DATA.map((player) => (
-            <View
-              key={player.rank}
-              style={[styles.listItem, player.isUser && styles.userListItem]}
-            >
-              <Text
-                style={[styles.listRank, { color: getRankColor(player.rank) }]}
-              >
-                {player.rank}
-              </Text>
-              <View style={styles.listAvatar}>
-                <Text style={styles.listInitial}> {player.name[0]} </Text>
-              </View>
-              <View style={styles.listInfo}>
-                <Text
-                  style={[
-                    styles.listName,
-                    player.isUser && styles.userListName,
-                  ]}
-                >
-                  {player.name}
-                  {player.isUser && (
-                    <Text style={styles.youBadge}> (Sen)</Text>
-                  )}
+          {LIST.map((player) => {
+            const trendColor = player.trend.startsWith("+")
+              ? Colors.emerald
+              : player.trend === "0" ? Colors.textSecondary : Colors.coral;
+            return (
+              <View key={player.rank} style={[styles.listItem, player.isUser && styles.listItemUser]}>
+                <Text style={styles.listRank}>#{player.rank}</Text>
+                <HexAvatar
+                  initials={player.initials}
+                  color={player.isUser ? Colors.cyan : Colors.textSecondary}
+                  size={40}
+                />
+                <View style={styles.listInfo}>
+                  <Text style={[styles.listName, player.isUser && styles.listNameUser]}>
+                    {player.name}
+                    {player.isUser && <Text style={styles.youTag}> SEN</Text>}
+                  </Text>
+                  <Text style={styles.listArea}>{player.area}</Text>
+                </View>
+                <Text style={[styles.listTrend, { color: trendColor }]}>
+                  {player.trend !== "0" ? (player.trend.startsWith("+") ? "↑" : "↓") + player.trend.slice(1) : "—"}
                 </Text>
               </View>
-              <Text style={styles.listArea}>{player.area}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
-        <View style={{ height: 40 }} />
+
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 16,
   },
-  title: { fontSize: 28, fontWeight: "bold", color: Colors.textPrimary },
-  filterButton: {
+  seasonRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  seasonLabel: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1 },
+  seasonTimer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
     gap: 4,
+    backgroundColor: `${Colors.coral}18`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+    borderColor: `${Colors.coral}40`,
   },
-  filterText: { fontSize: 14, color: Colors.textSecondary },
+  timerDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.coral },
+  timerText: { fontSize: 10, fontWeight: "700", color: Colors.coral },
+  title: { fontSize: 28, fontWeight: "800", color: Colors.textPrimary },
+  trophyBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: `${Colors.gold}18`,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: `${Colors.gold}40`,
+  },
+  trophyEmoji: { fontSize: 24 },
   tabs: {
     flexDirection: "row",
     paddingHorizontal: 20,
+    gap: 8,
     marginBottom: 20,
-    gap: 12,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceSolid,
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
   },
-  activeTab: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  tabText: { fontSize: 14, fontWeight: "500", color: Colors.textSecondary },
-  activeTabText: { color: Colors.background, fontWeight: "600" },
-  podiumContainer: {
+  tabActive: { backgroundColor: Colors.cyan, borderColor: Colors.cyan },
+  tabText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary },
+  tabTextActive: { color: Colors.background, fontWeight: "700" },
+
+  // Podium
+  podiumWrapper: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "flex-end",
-    paddingHorizontal: 20,
-    marginBottom: 32,
-    height: 240,
-  },
-  podiumItem: { alignItems: "center", width: 100 },
-  podiumCenter: { zIndex: 1 },
-  podiumLeft: { marginRight: -10 },
-  podiumRight: { marginLeft: -10 },
-  podiumAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.surface,
     justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 3,
-    marginBottom: 8,
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  podiumAvatarCenter: { width: 80, height: 80, borderRadius: 40 },
-  podiumInitial: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: Colors.textPrimary,
-  },
-  crownBadge: {
-    position: "absolute",
-    top: -8,
-    right: -8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surface,
+  podiumItem: { alignItems: "center", flex: 1 },
+  podiumSide: { marginBottom: 0 },
+  podiumCenter: { marginHorizontal: 8 },
+  crownAbove: { marginBottom: 4 },
+  crownEmoji: { fontSize: 28 },
+  hexAvatar: {
+    backgroundColor: "rgba(255,255,255,0.06)",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: Colors.gold,
+    marginBottom: 8,
   },
-  podiumName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-    marginBottom: 2,
-  },
-  podiumArea: { fontSize: 12, fontWeight: "500", marginBottom: 12 },
+  hexAvatarText: { fontWeight: "800" },
+  podiumName: { fontSize: 12, fontWeight: "700", color: Colors.textPrimary, marginBottom: 2 },
+  podiumTitle: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5, marginBottom: 2 },
+  podiumArea: { fontSize: 11, color: Colors.textSecondary, marginBottom: 8 },
   podiumBar: {
     width: "100%",
     borderTopLeftRadius: 8,
@@ -255,36 +246,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 8,
   },
-  podiumRank: { fontSize: 14, fontWeight: "bold", color: Colors.background },
+  podiumRankNum: { fontSize: 14, fontWeight: "800", color: Colors.background },
+
+  // Season reward
+  rewardCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${Colors.gold}10`,
+    borderRadius: 16,
+    padding: 14,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: `${Colors.gold}30`,
+    marginBottom: 20,
+    gap: 10,
+  },
+  rewardIcon: { fontSize: 24 },
+  rewardInfo: { flex: 1 },
+  rewardTitle: { fontSize: 10, fontWeight: "700", color: Colors.gold, letterSpacing: 1, marginBottom: 2 },
+  rewardDesc: { fontSize: 12, color: Colors.textSecondary },
+  rewardRank: { alignItems: "center" },
+  rewardRankLabel: { fontSize: 9, color: Colors.textMuted, letterSpacing: 1 },
+  rewardRankValue: { fontSize: 18, fontWeight: "800", color: Colors.gold },
+
+  // List
   listContainer: { paddingHorizontal: 20 },
   listItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 14,
+    backgroundColor: Colors.surfaceSolid,
+    borderRadius: 14,
+    padding: 12,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
+    gap: 10,
   },
-  userListItem: {
-    borderColor: Colors.primary,
-    backgroundColor: "rgba(0, 240, 255, 0.05)",
-  },
-  listRank: { fontSize: 16, fontWeight: "bold", width: 32 },
-  listAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.background,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  listInitial: { fontSize: 16, fontWeight: "600", color: Colors.textPrimary },
+  listItemUser: { borderColor: `${Colors.cyan}50`, backgroundColor: `${Colors.cyan}08` },
+  listRank: { fontSize: 14, fontWeight: "800", color: Colors.textSecondary, width: 28 },
   listInfo: { flex: 1 },
-  listName: { fontSize: 15, fontWeight: "500", color: Colors.textPrimary },
-  userListName: { color: Colors.primary, fontWeight: "600" },
-  youBadge: { fontSize: 12, color: Colors.textSecondary },
-  listArea: { fontSize: 14, fontWeight: "600", color: Colors.textSecondary },
+  listName: { fontSize: 14, fontWeight: "600", color: Colors.textPrimary },
+  listNameUser: { color: Colors.cyan, fontWeight: "700" },
+  youTag: { fontSize: 10, color: Colors.cyan, fontWeight: "800" },
+  listArea: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
+  listTrend: { fontSize: 13, fontWeight: "700" },
 });

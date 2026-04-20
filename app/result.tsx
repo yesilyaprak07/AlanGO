@@ -1,4 +1,4 @@
-﻿import {
+import {
   View,
   Text,
   StyleSheet,
@@ -6,13 +6,12 @@
   Dimensions,
   Platform,
   Share,
+  Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Share2, ArrowRight, MapPin } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
 import { useEffect, useRef } from "react";
-import { Animated } from "react-native";
 import MapView, { Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import { useGameStore } from "@/stores/gameStore";
 import { darkMapStyle } from "@/constants/mapStyles";
@@ -30,39 +29,42 @@ function formatDistance(meters: number): string {
   return `${Math.round(meters)}m`;
 }
 
-function formatArea(m2: number): string {
-  return `${Math.round(m2).toLocaleString("tr-TR")} m²`;
-}
-
 export default function ResultScreen() {
   const router = useRouter();
   const { lastRun, territories } = useGameStore();
   const mapRef = useRef<MapView>(null);
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.6)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const glowAnim = useRef(new Animated.Value(0.3)).current;
 
   const area = lastRun?.area ?? 0;
   const distance = lastRun?.distance ?? 0;
   const duration = lastRun?.duration ?? 0;
   const polygon = lastRun?.polygon ?? [];
   const xp = Math.round(area / 10) + Math.round(distance / 5);
+  const gold = Math.round(area / 20) + 50;
+  const areaKm2 = (area / 1_000_000).toFixed(2);
+  const level = 24;
+  const xpCurrent = 2300;
+  const xpNext = 3500;
+  const xpProgress = (xpCurrent / xpNext) * 100;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }),
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, tension: 60, friction: 7, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
-  }, [scaleAnim, slideAnim]);
 
-  // Fit map to polygon
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 0.8, duration: 1800, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.3, duration: 1800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [scaleAnim, fadeAnim, slideAnim, glowAnim]);
+
   useEffect(() => {
     if (polygon.length > 0 && mapRef.current) {
       setTimeout(() => {
@@ -77,18 +79,17 @@ export default function ResultScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `AlanGO'da ${formatArea(area)} alan fethettim! Mesafe: ${formatDistance(distance)}, Süre: ${formatTime(duration)} (+${xp} XP) 🗺️`,
+        message: `AlanGO'da ${areaKm2} km² bölge fethettim! (+${xp} XP +${gold} altın) 🏴`,
       });
     } catch {}
   };
 
-  const handleContinue = () => {
-    router.replace("/(tabs)/map");
-  };
+  const handleContinue = () => router.replace("/(tabs)/map");
+  const handleSave = () => router.replace("/(tabs)/map");
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Map Preview with actual polygon */}
+      {/* Map preview (top third) */}
       <View style={styles.mapPreview}>
         {polygon.length > 0 ? (
           <MapView
@@ -109,167 +110,247 @@ export default function ResultScreen() {
           >
             <Polygon
               coordinates={polygon}
-              strokeColor={Colors.primary}
+              strokeColor={Colors.cyan}
               strokeWidth={3}
-              fillColor="rgba(0, 240, 255, 0.3)"
+              fillColor={`${Colors.cyan}35`}
             />
           </MapView>
         ) : (
-          <View style={styles.gridBackground}>
-            <View style={styles.miniTerritory} />
-            <View style={styles.miniCenter} />
+          <View style={styles.mapPlaceholder}>
+            <Text style={styles.mapPlaceholderText}>🗺️</Text>
           </View>
         )}
+
+        {/* Victory badge overlay */}
+        <View style={styles.victoryBadge}>
+          <Text style={styles.victoryEmoji}>👑</Text>
+          <Text style={styles.victoryLabel}>ZAFER</Text>
+          <Text style={styles.victoryEmoji}>👑</Text>
+        </View>
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
-        <Animated.View
-          style={[
-            styles.resultContainer,
-            { transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <Text style={styles.areaValue}>{formatArea(area)}</Text>
-          <View style={styles.xpBadge}>
-            <Text style={styles.xpText}>+{xp} XP</Text>
+      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        {/* Flag hex */}
+        <Animated.View style={[styles.flagHex, { transform: [{ scale: scaleAnim }] }]}>
+          <Animated.View style={[styles.flagGlow, { opacity: glowAnim }]} />
+          <View style={styles.flagInner}>
+            <Text style={styles.flagEmoji}>🏴</Text>
           </View>
         </Animated.View>
 
-        {/* Stats */}
-        <Animated.View
-          style={[
-            styles.statsContainer,
-            { transform: [{ translateY: slideAnim }] },
-          ]}
-        >
-          <View style={styles.statCard}>
-            <MapPin size={20} color={Colors.primary} />
-            <Text style={styles.statValue}>{formatDistance(distance)}</Text>
-            <Text style={styles.statLabel}>Mesafe</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>⏱️</Text>
-            <Text style={styles.statValue}>{formatTime(duration)}</Text>
-            <Text style={styles.statLabel}>Süre</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>🏅</Text>
-            <Text style={styles.statValue}>{territories.length}</Text>
-            <Text style={styles.statLabel}>Bölge</Text>
-          </View>
-        </Animated.View>
+        <Text style={styles.victoryTitle}>Bölge Senin!</Text>
+        <Text style={styles.victorySubtitle}>Karşıyaka sokak 14 artık senin egemenlik alanın</Text>
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-            <Share2 size={20} color={Colors.primary} />
-            <Text style={styles.shareText}>Paylaş</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.continueButton}
-            onPress={handleContinue}
-          >
-            <Text style={styles.continueText}>Devam Et</Text>
-            <ArrowRight size={20} color={Colors.background} />
-          </TouchableOpacity>
+        {/* Area display */}
+        <View style={styles.areaDisplay}>
+          <Text style={styles.areaLabel}>ELE GEÇİRİLEN ALAN</Text>
+          <Text style={styles.areaValue}>{area > 0 ? areaKm2 : "0.84"}</Text>
+          <Text style={styles.areaUnit}>km²</Text>
         </View>
-      </View>
+
+        {/* Level + XP */}
+        <View style={styles.levelRow}>
+          <Text style={styles.levelLabel}>SEVİYE {level}</Text>
+          <Text style={styles.xpText}>{xpCurrent.toLocaleString()} / {xpNext.toLocaleString()} XP</Text>
+        </View>
+        <View style={styles.xpTrack}>
+          <View style={[styles.xpBar, { width: `${xpProgress}%` }]} />
+        </View>
+
+        {/* Bonus card */}
+        <View style={styles.bonusCard}>
+          <Text style={styles.bonusIcon}>🔥</Text>
+          <View style={styles.bonusInfo}>
+            <Text style={styles.bonusTitle}>BONUSU</Text>
+            <Text style={styles.bonusValue}>+{gold} altın · +{xp} XP ekstra</Text>
+          </View>
+          <View style={styles.bonusClaimed}>
+            <Text style={styles.bonusClaimedText}>ALINDI</Text>
+          </View>
+        </View>
+
+        {/* Stats mini row */}
+        <View style={styles.miniStats}>
+          <View style={styles.miniStatItem}>
+            <Text style={styles.miniStatValue}>{formatDistance(distance)}</Text>
+            <Text style={styles.miniStatLabel}>Mesafe</Text>
+          </View>
+          <View style={styles.miniStatDivider} />
+          <View style={styles.miniStatItem}>
+            <Text style={styles.miniStatValue}>{formatTime(duration)}</Text>
+            <Text style={styles.miniStatLabel}>Süre</Text>
+          </View>
+          <View style={styles.miniStatDivider} />
+          <View style={styles.miniStatItem}>
+            <Text style={styles.miniStatValue}>{territories.length}</Text>
+            <Text style={styles.miniStatLabel}>Toplam Bölge</Text>
+          </View>
+        </View>
+
+        {/* Actions */}
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+          <Text style={styles.saveButtonText}>🛡️  Bölgeyi Şimdi Savun</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+          <Text style={styles.continueText}>Devam Et ›</Text>
+        </TouchableOpacity>
+      </Animated.View>
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   mapPreview: {
-    height: 300,
-    backgroundColor: "#14181A",
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    height: 200,
+    backgroundColor: "#0F0D1A",
+    position: "relative",
     overflow: "hidden",
   },
-  gridBackground: { flex: 1, position: "relative" },
-  miniTerritory: {
+  mapPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
+  mapPlaceholderText: { fontSize: 48 },
+  victoryBadge: {
     position: "absolute",
-    width: 120,
-    height: 100,
-    backgroundColor: "rgba(0, 240, 255, 0.3)",
-    borderRadius: 60,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    top: 80,
-    left: 60,
-    transform: [{ rotate: "-15deg" }],
-  },
-  miniCenter: {
-    position: "absolute",
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
-    top: 130,
-    left: 100,
-  },
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
-  resultContainer: { alignItems: "center", marginBottom: 32 },
-  areaValue: {
-    fontSize: 48,
-    fontWeight: "bold",
-    color: Colors.textPrimary,
-    marginBottom: 16,
-  },
-  xpBadge: {
-    backgroundColor: "rgba(0, 240, 255, 0.15)",
-    paddingHorizontal: 20,
+    top: 16,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(26, 20, 40, 0.88)",
+    paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: `${Colors.gold}50`,
   },
-  xpText: { fontSize: 16, fontWeight: "600", color: Colors.primary },
-  statsContainer: {
+  victoryEmoji: { fontSize: 14 },
+  victoryLabel: { fontSize: 12, fontWeight: "800", color: Colors.gold, letterSpacing: 3 },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 0,
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  flagHex: {
+    position: "relative",
+    marginTop: -40,
+    marginBottom: 12,
+  },
+  flagGlow: {
+    position: "absolute",
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: Colors.purple,
+    opacity: 0.2,
+    top: -10,
+    left: -10,
+  },
+  flagInner: {
+    width: 110,
+    height: 110,
+    borderRadius: 22,
+    backgroundColor: `${Colors.purple}25`,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: `${Colors.purple}50`,
+  },
+  flagEmoji: { fontSize: 52 },
+  victoryTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  victorySubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  areaDisplay: { alignItems: "center", marginBottom: 14 },
+  areaLabel: { fontSize: 10, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
+  areaValue: { fontSize: 52, fontWeight: "800", color: Colors.cyan, lineHeight: 56 },
+  areaUnit: { fontSize: 18, fontWeight: "600", color: Colors.textSecondary },
+  levelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 40,
+    width: "100%",
+    marginBottom: 6,
   },
-  statCard: {
-    width: (width - 72) / 3,
-    backgroundColor: Colors.surface,
+  levelLabel: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 0.5 },
+  xpText: { fontSize: 11, color: Colors.cyan, fontWeight: "600" },
+  xpTrack: {
+    width: "100%",
+    height: 4,
+    backgroundColor: Colors.surfaceBorder,
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  xpBar: { height: "100%", backgroundColor: Colors.purple, borderRadius: 2 },
+  bonusCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceSolid,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    width: "100%",
+    marginBottom: 12,
+    gap: 12,
+  },
+  bonusIcon: { fontSize: 24 },
+  bonusInfo: { flex: 1 },
+  bonusTitle: { fontSize: 10, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1 },
+  bonusValue: { fontSize: 13, fontWeight: "600", color: Colors.textPrimary },
+  bonusClaimed: {
+    backgroundColor: `${Colors.coral}20`,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${Colors.coral}40`,
+  },
+  bonusClaimedText: { fontSize: 10, fontWeight: "700", color: Colors.coral },
+  miniStats: {
+    flexDirection: "row",
+    width: "100%",
+    backgroundColor: Colors.surfaceSolid,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
+    padding: 14,
+    marginBottom: 14,
+  },
+  miniStatItem: { flex: 1, alignItems: "center" },
+  miniStatValue: { fontSize: 15, fontWeight: "700", color: Colors.textPrimary, marginBottom: 2 },
+  miniStatLabel: { fontSize: 10, color: Colors.textSecondary },
+  miniStatDivider: { width: 1, backgroundColor: Colors.surfaceBorder },
+  saveButton: {
+    width: "100%",
+    backgroundColor: Colors.emerald,
+    height: 54,
     borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-  },
-  statIcon: { fontSize: 20, marginBottom: 8 },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: Colors.textPrimary,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statLabel: { fontSize: 12, color: Colors.textSecondary },
-  actions: { gap: 12 },
-  shareButton: {
-    flexDirection: "row",
-    alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.surface,
-    height: 56,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    gap: 8,
+    alignItems: "center",
+    marginBottom: 10,
   },
-  shareText: { fontSize: 16, fontWeight: "600", color: Colors.textPrimary },
+  saveButtonText: { fontSize: 15, fontWeight: "700", color: Colors.background },
   continueButton: {
-    flexDirection: "row",
-    alignItems: "center",
+    width: "100%",
+    backgroundColor: Colors.surfaceSolid,
+    height: 48,
+    borderRadius: 16,
     justifyContent: "center",
-    backgroundColor: Colors.primary,
-    height: 56,
-    borderRadius: 12,
-    gap: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.surfaceBorder,
   },
-  continueText: { fontSize: 16, fontWeight: "600", color: Colors.background },
+  continueText: { fontSize: 15, fontWeight: "600", color: Colors.textSecondary },
 });
