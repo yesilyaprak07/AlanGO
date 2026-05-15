@@ -75,6 +75,7 @@ export default function TabLayout() {
       <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="leaderboard" options={{ href: null }} />
       <Tabs.Screen name="discover" options={{ href: null }} />
+      <Tabs.Screen name="feed" options={{ href: null }} />
     </Tabs>
   );
 }

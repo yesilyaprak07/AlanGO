@@ -1,26 +1,30 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Dimensions,
-  Platform,
-} from "react-native";
+﻿import { View, Text, StyleSheet, Animated, Pressable, Platform, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, Pause } from "lucide-react-native";
-import { Colors } from "@/constants/colors";
+import { Flag, Pause, Radar, Shield, Timer, X } from "lucide-react-native";
 import { useEffect, useState, useRef, useCallback } from "react";
 import MapView, { Marker, Polyline, Polygon, Circle, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
 import { useGameStore, computePolygonArea } from "@/stores/gameStore";
 import { darkMapStyle } from "@/constants/mapStyles";
+import { GlassCard, NeonButton, TopModeSwitcher } from "@/components/ui";
+import { theme } from "@/constants/theme";
+import { GlowPulseView, ShimmerBadge } from "@/components/motion";
+import { ROUTES } from "@/constants/routes";
+import { getBottomCtaPadding, isCompactHeight, isNarrowWidth } from "@/constants/safeArea";
 
 const FALLBACK = { latitude: 36.8969, longitude: 30.7133 };
 const CLOSE_DISTANCE_THRESHOLD = 30;
 const MIN_TRAIL_POINTS = 10;
 const SPEED_LIMIT_KMH = 25;
+
+type ModeKey = "private" | "solo" | "squad";
+
+const RUN_MODE_OPTIONS: { key: ModeKey; label: string }[] = [
+  { key: "private", label: "Ã–zel Lobi" },
+  { key: "solo", label: "Tek KiÅŸi" },
+  { key: "squad", label: "Grubum" },
+];
 
 function getDistanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
   const R = 6371000;
@@ -39,7 +43,53 @@ function formatTime(seconds: number): string {
   return `${m}:${s}`;
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+function ActionCircleButton({
+  icon,
+  label,
+  compact = false,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  compact?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={({ pressed }) => [styles.actionCircle, compact && styles.actionCircleCompact, pressed && styles.pressed]} onPress={onPress}>
+      <View style={styles.actionCircleIcon}>{icon}</View>
+      {!compact ? <Text style={styles.actionCircleText}>{label}</Text> : null}
+    </Pressable>
+  );
+}
+
+function SafeTop({ insetsTop, children }: { insetsTop: number; children: React.ReactNode }) {
+  return <View style={[styles.topOverlay, { paddingTop: insetsTop + 6 }]}>{children}</View>;
+}
+
+function AnimatedMetricValue({ value }: { value: string }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    opacity.setValue(0.35);
+    translateY.setValue(4);
+
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY, value]);
+
+  return <Animated.Text style={[styles.metricNumber, { opacity, transform: [{ translateY }] }]}>{value}</Animated.Text>;
+}
 
 export default function ActiveGameScreen() {
   const router = useRouter();
@@ -56,8 +106,14 @@ export default function ActiveGameScreen() {
   const [nearStart, setNearStart] = useState(false);
   const [liveArea, setLiveArea] = useState(0);
   const [speedViolation, setSpeedViolation] = useState(false);
+  const [activeMode, setActiveMode] = useState<ModeKey>("solo");
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const finishPulse = useRef(new Animated.Value(0)).current;
+  const gpsPulse = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const compactHeight = isCompactHeight(height);
+  const narrow = isNarrowWidth(width);
 
   useEffect(() => {
     if (closed) return;
@@ -66,20 +122,52 @@ export default function ActiveGameScreen() {
   }, [closed]);
 
   useEffect(() => {
-    Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.8, duration: 1200, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
       ])
-    ).start();
+    );
+
+    pulseLoop.start();
+
+    return () => {
+      pulseLoop.stop();
+    };
   }, [pulseAnim]);
+
+  useEffect(() => {
+    const finishLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(finishPulse, { toValue: 1, duration: 560, useNativeDriver: true }),
+        Animated.timing(finishPulse, { toValue: 0, duration: 560, useNativeDriver: true }),
+      ])
+    );
+
+    const gpsLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(gpsPulse, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(gpsPulse, { toValue: 0, duration: 500, useNativeDriver: true }),
+      ])
+    );
+
+    finishLoop.start();
+    gpsLoop.start();
+
+    return () => {
+      finishLoop.stop();
+      gpsLoop.stop();
+    };
+  }, [finishPulse, gpsPulse]);
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
     let isMounted = true;
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted" || !isMounted) return;
+
       subscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 2 },
         (loc) => {
@@ -88,7 +176,12 @@ export default function ActiveGameScreen() {
           const rawSpeed = loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : 0;
           setSpeed(rawSpeed);
           setCurrentPos(coords);
-          if (rawSpeed * 3.6 > SPEED_LIMIT_KMH) { setSpeedViolation(true); return; }
+
+          if (rawSpeed * 3.6 > SPEED_LIMIT_KMH) {
+            setSpeedViolation(true);
+            return;
+          }
+
           setSpeedViolation(false);
           setTrail((prev) => {
             if (prev.length > 0) {
@@ -96,10 +189,12 @@ export default function ActiveGameScreen() {
               if (dist < 2) return prev;
               setTotalDistance((d) => d + dist);
             }
+
             if (prev.length === 0) {
               startPoint.current = coords;
               mapRef.current?.animateToRegion({ ...coords, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 600);
             }
+
             const updated = [...prev, coords];
             if (startPoint.current && updated.length >= MIN_TRAIL_POINTS) {
               setNearStart(getDistanceMeters(coords, startPoint.current) <= CLOSE_DISTANCE_THRESHOLD);
@@ -110,14 +205,26 @@ export default function ActiveGameScreen() {
         }
       );
     })();
-    return () => { isMounted = false; subscription?.remove(); };
+
+    return () => {
+      isMounted = false;
+      subscription?.remove();
+    };
   }, [closed]);
 
-  const handleClose = () => router.replace("/(tabs)/map");
+  const handleClose = () => router.replace(ROUTES.tabs.map);
 
   const handleCapture = useCallback(() => {
-    if (closed) { router.push("/result"); return; }
-    if (trail.length < MIN_TRAIL_POINTS) { router.replace("/(tabs)/map"); return; }
+    if (closed) {
+      router.push(ROUTES.result);
+      return;
+    }
+
+    if (trail.length < MIN_TRAIL_POINTS) {
+      router.replace(ROUTES.tabs.map);
+      return;
+    }
+
     const closedTrail = [...trail, trail[0]];
     const area = computePolygonArea(closedTrail);
     addTerritory({ polygon: closedTrail, area, distance: totalDistance, duration: elapsed });
@@ -135,302 +242,493 @@ export default function ActiveGameScreen() {
   const canClose = trail.length >= MIN_TRAIL_POINTS;
   const distKm = (totalDistance / 1000).toFixed(2);
   const areaKm2 = (liveArea / 1_000_000).toFixed(2);
-
-  // Closing distance progress (0 to 1 when within threshold)
-  const closeProgress = nearStart ? 1 : 0;
+  const shieldSeconds = Math.max(0, 150 - elapsed);
+  const trailNodes = trail.filter((_, idx) => idx % 3 === 0 || idx === trail.length - 1);
+  const hiddenRewardSignal = trail.length > 8 && !closed;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Top metrics bar */}
-      <View style={styles.topMetrics}>
-        <View style={styles.topLeft}>
-          <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-            <X size={18} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.statusPill}>
-            <View style={[styles.statusDot, closed ? styles.statusDotClosed : styles.statusDotActive]} />
-            <Text style={styles.statusText}>
-              {closed ? "TAMAMLANDI" : "YAKALAMA AKTİF"}
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity style={styles.closeLineBtn} onPress={() => {}}>
-          <Text style={styles.closeLineTxt}>Çizgiyi kapat</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFillObject}
+        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+        customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
+        initialRegion={region}
+        showsCompass={false}
+        showsScale={false}
+        toolbarEnabled={false}
+      >
+        {territories.map((t) => (
+          <Polygon
+            key={t.id}
+            coordinates={t.polygon}
+            strokeColor="rgba(0, 229, 204, 0.40)"
+            strokeWidth={2}
+            fillColor={t.color ?? "rgba(0, 229, 204, 0.14)"}
+          />
+        ))}
 
-      {/* Metric pills */}
-      <View style={styles.metricBar}>
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>SÜRE</Text>
-          <Text style={styles.metricValue}>{formatTime(elapsed)}</Text>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>KM</Text>
-          <Text style={styles.metricValue}>{distKm}</Text>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>KM²</Text>
-          <Text style={styles.metricValue}>{areaKm2}</Text>
-        </View>
-      </View>
-
-      {/* Map */}
-      <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          style={StyleSheet.absoluteFillObject}
-          provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-          customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
-          initialRegion={region}
-          showsCompass={false}
-          showsScale={false}
-          toolbarEnabled={false}
-        >
-          {territories.map((t) => (
-            <Polygon key={t.id} coordinates={t.polygon} strokeColor={`${Colors.cyan}50`} strokeWidth={2} fillColor={t.color ?? `${Colors.cyan}18`} />
-          ))}
-          {trail.length >= 2 && (
-            <Polyline coordinates={trail} strokeColor={Colors.cyan} strokeWidth={4} lineDashPattern={closed ? undefined : [8, 4]} />
-          )}
-          {closed && trail.length >= 3 && (
-            <Polygon coordinates={trail} strokeColor={Colors.cyan} strokeWidth={3} fillColor={`${Colors.cyan}28`} />
-          )}
-          {startPoint.current && !closed && trail.length >= 3 && (
-            <>
-              <Circle center={startPoint.current} radius={CLOSE_DISTANCE_THRESHOLD} strokeColor={`${Colors.cyan}30`} fillColor={`${Colors.cyan}08`} strokeWidth={1} />
-              <Marker coordinate={startPoint.current} anchor={{ x: 0.5, y: 0.5 }}>
-                <View style={styles.startMarker} />
-              </Marker>
-            </>
-          )}
-          {currentPos && (
-            <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }}>
-              <View style={styles.playerMarkerContainer}>
-                <Animated.View style={[styles.playerPulse, { transform: [{ scale: pulseAnim }], opacity: pulseOpacity }]} />
-                <View style={styles.playerDot} />
-              </View>
-            </Marker>
-          )}
-        </MapView>
-
-        {/* Rival warning on map */}
-        {!closed && (
-          <View style={styles.rivalBadge}>
-            <Text style={styles.rivalBadgeIcon}>⚠️</Text>
-            <Text style={styles.rivalBadgeText}>Rakip 80m yakında</Text>
-          </View>
-        )}
-
-        {/* Speed violation */}
-        {speedViolation && !closed && (
-          <View style={styles.speedBadge}>
-            <Text style={styles.speedBadgeText}>Hız limiti: maks {SPEED_LIMIT_KMH} km/s</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Bottom panel */}
-      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 12 }]}>
-        {/* Closing distance */}
-        <View style={styles.closeDistSection}>
-          <View style={styles.closeDistRow}>
-            <Text style={styles.closeDistLabel}>KAPANMA MESAFESİ</Text>
-            <Text style={[styles.closeDistValue, nearStart && { color: Colors.emerald }]}>
-              {nearStart ? "Kapat!" : `${Math.max(0, Math.round(CLOSE_DISTANCE_THRESHOLD - (startPoint.current && trail.length > 0 ? getDistanceMeters(trail[trail.length - 1] ?? FALLBACK, startPoint.current) : CLOSE_DISTANCE_THRESHOLD)))}m kaldı`}
-            </Text>
-          </View>
-          <View style={styles.closeTrack}>
-            <View
-              style={[
-                styles.closeBar,
-                {
-                  width: `${Math.min(100, canClose ? (nearStart ? 100 : 60) : 20)}%`,
-                  backgroundColor: nearStart ? Colors.emerald : Colors.cyan,
-                },
-              ]}
+        {trail.length >= 2 && (
+          <>
+            <Polyline
+              coordinates={trail}
+              strokeColor="rgba(0, 229, 204, 0.24)"
+              strokeWidth={8}
+              lineDashPattern={closed ? undefined : [9, 4]}
             />
+            <Polyline
+              coordinates={trail}
+              strokeColor={theme.colors.primaryCyan}
+              strokeWidth={5}
+              lineDashPattern={closed ? undefined : [9, 4]}
+            />
+          </>
+        )}
+
+        {trailNodes.map((point, idx) => (
+          <Marker key={`trail-node-${idx}`} coordinate={point} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.routeNode} />
+          </Marker>
+        ))}
+
+        {closed && trail.length >= 3 && (
+          <Polygon
+            coordinates={trail}
+            strokeColor={theme.colors.primaryCyan}
+            strokeWidth={3}
+            fillColor="rgba(0, 229, 204, 0.26)"
+          />
+        )}
+
+        {startPoint.current && !closed && trail.length >= 3 && (
+          <>
+            <Circle
+              center={startPoint.current}
+              radius={CLOSE_DISTANCE_THRESHOLD}
+              strokeColor="rgba(0, 229, 204, 0.32)"
+              fillColor="rgba(0, 229, 204, 0.08)"
+              strokeWidth={1}
+            />
+            <Marker coordinate={startPoint.current} anchor={{ x: 0.5, y: 0.5 }}>
+              <View style={styles.startMarker} />
+            </Marker>
+          </>
+        )}
+
+        {currentPos && (
+          <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.playerMarkerContainer}>
+              <Animated.View style={[styles.playerPulse, { transform: [{ scale: pulseAnim }], opacity: pulseOpacity }]} />
+              <View style={styles.playerDot} />
+            </View>
+          </Marker>
+        )}
+      </MapView>
+
+      <SafeTop insetsTop={insets.top}>
+        <View style={styles.headerRow}>
+          <Pressable style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]} onPress={handleClose}>
+            <X size={16} color={theme.colors.textPrimary} />
+          </Pressable>
+          <View style={styles.livePill}>
+            <View style={[styles.liveDot, closed ? styles.liveDotClosed : styles.liveDotActive]} />
+            <Text style={styles.livePillText}>{closed ? "TamamlandÄ±" : "Aktif KoÅŸu"}</Text>
           </View>
         </View>
 
-        {/* Action buttons */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.pauseBtn} onPress={handleClose}>
-            <Pause size={18} color={Colors.textPrimary} />
-            <Text style={styles.pauseTxt}>Duraklat</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.captureBtn,
-              closed ? styles.captureBtnResult : nearStart ? styles.captureBtnReady : styles.captureBtnDefault,
-            ]}
-            onPress={handleCapture}
-          >
-            <Text style={styles.captureTxt}>
-              {closed ? "Sonuçları Gör ›" : "Bölgeyi Kapat ✓"}
-            </Text>
-          </TouchableOpacity>
+        <TopModeSwitcher options={RUN_MODE_OPTIONS} value={activeMode} onChange={setActiveMode} />
+
+        <GlassCard style={styles.metricsCard} contentStyle={styles.metricsContent}>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricTitle}>SÃ¼re</Text>
+            <AnimatedMetricValue value={formatTime(elapsed)} />
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricItem}>
+            <Text style={styles.metricTitle}>Mesafe</Text>
+            <AnimatedMetricValue value={`${distKm} km`} />
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricItem}>
+            <Text style={styles.metricTitle}>Alan</Text>
+            <AnimatedMetricValue value={`${areaKm2} kmÂ²`} />
+          </View>
+        </GlassCard>
+      </SafeTop>
+
+      <View style={[styles.rightPowerPanel, compactHeight && styles.rightPowerPanelCompact]}>
+        <GlassCard contentStyle={styles.powerCardContent}>
+          <View style={styles.powerRow}>
+            <Shield size={14} color={theme.colors.primaryCyan} />
+            <Text style={styles.powerLabel}>Kalkan</Text>
+          </View>
+          <Text style={styles.powerValue}>{formatTime(shieldSeconds)}</Text>
+        </GlassCard>
+        <ActionCircleButton
+          icon={<Radar size={16} color={theme.colors.primaryCyan} />}
+          label="Radar"
+          compact={narrow}
+          onPress={() => mapRef.current?.animateToRegion({ ...region, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 400)}
+        />
+      </View>
+
+      {speedViolation && !closed && (
+        <View style={styles.warningBadge}>
+          <Text style={styles.warningText}>HÄ±z limiti aÅŸÄ±ldÄ±: {SPEED_LIMIT_KMH} km/s</Text>
         </View>
+      )}
+
+      {hiddenRewardSignal && (
+        <ShimmerBadge style={[styles.rewardSignal, { bottom: getBottomCtaPadding(insets.bottom, compactHeight ? 154 : 182) }]} shimmerColor="rgba(255, 200, 87, 0.38)">
+          <Text style={styles.rewardSignalText}>Gizli Ã¶dÃ¼l sinyali gÃ¼Ã§leniyor</Text>
+        </ShimmerBadge>
+      )}
+
+      <View style={[styles.bottomOverlay, { paddingBottom: getBottomCtaPadding(insets.bottom, 8) }]}>
+        <View style={[styles.bottomActionsRow, narrow && styles.bottomActionsRowCompact]}>
+          <ActionCircleButton icon={<Pause size={16} color={theme.colors.textPrimary} />} label="Duraklat" compact={narrow} onPress={handleClose} />
+          <GlowPulseView duration={600} minOpacity={0.88} maxOpacity={1} minScale={1} maxScale={1.035}>
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    scale: finishPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.04],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Pressable style={({ pressed }) => [styles.finishButton, narrow && styles.finishButtonCompact, pressed && styles.pressed]} onPress={handleCapture}>
+                <Text style={styles.finishTitle}>{closed ? "Sonucu AÃ§" : "Bitir & Kapat"}</Text>
+                <Text style={styles.finishSubtitle}>
+                  {closed
+                    ? "KoÅŸuyu tamamladÄ±n"
+                    : nearStart
+                      ? "Ã‡ember kapatmaya hazÄ±r"
+                      : canClose
+                        ? "DÃ¶ngÃ¼yÃ¼ tamamla"
+                        : "En az 10 rota noktasÄ± gerekli"}
+                </Text>
+              </Pressable>
+            </Animated.View>
+          </GlowPulseView>
+          <ActionCircleButton icon={<Flag size={16} color={theme.colors.goldReward} />} label="Tur Bitir" compact={narrow} onPress={handleCapture} />
+        </View>
+
+        <View style={styles.gpsStatusRow}>
+          <Timer size={13} color={theme.colors.success} />
+          <Text style={styles.gpsStatusText}>GPS gÃ¼Ã§lÃ¼ / aktif</Text>
+          <Animated.View
+            style={[
+              styles.gpsDot,
+              {
+                opacity: gpsPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }),
+                transform: [
+                  {
+                    scale: gpsPulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.3] }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Text style={styles.gpsSpeedText}>{Math.max(0, speed * 3.6).toFixed(1)} km/s</Text>
+        </View>
+
+        <NeonButton
+          label="Ã‡izgiyi Kapat"
+          size="sm"
+          variant="ghost"
+          fullWidth
+          onPress={handleCapture}
+          disabled={!canClose && !closed}
+        />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  topMetrics: {
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.backgroundDeep,
+  },
+  topOverlay: {
+    position: "absolute",
+    left: theme.spacing.md,
+    right: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  headerRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: Colors.background,
-    zIndex: 10,
   },
-  topLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: Colors.surfaceSolid,
+  iconPill: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.md,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: theme.colors.surfaceCard,
     borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+    borderColor: theme.colors.borderSubtle,
   },
-  statusPill: {
+  livePill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: Colors.surfaceSolid,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.surfaceCard,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-  },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
-  statusDotActive: { backgroundColor: Colors.coral },
-  statusDotClosed: { backgroundColor: Colors.emerald },
-  statusText: { fontSize: 11, fontWeight: "700", color: Colors.textPrimary, letterSpacing: 0.5 },
-  closeLineBtn: {
-    backgroundColor: `${Colors.cyan}18`,
-    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
     borderWidth: 1,
-    borderColor: `${Colors.cyan}40`,
+    borderColor: theme.colors.borderSubtle,
   },
-  closeLineTxt: { fontSize: 12, fontWeight: "600", color: Colors.cyan },
-  metricBar: {
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  liveDotActive: {
+    backgroundColor: theme.colors.danger,
+  },
+  liveDotClosed: {
+    backgroundColor: theme.colors.success,
+  },
+  livePillText: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.xs,
+  },
+  metricsCard: {
+    borderRadius: theme.radius.lg,
+  },
+  metricsContent: {
     flexDirection: "row",
-    backgroundColor: Colors.surfaceSolid,
-    marginHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    marginBottom: 8,
-    overflow: "hidden",
+    alignItems: "stretch",
   },
-  metricItem: { flex: 1, alignItems: "center", paddingVertical: 12 },
-  metricLabel: { fontSize: 9, fontWeight: "700", color: Colors.textMuted, letterSpacing: 1.5, marginBottom: 4 },
-  metricValue: { fontSize: 20, fontWeight: "800", color: Colors.textPrimary },
-  metricDivider: { width: 1, backgroundColor: Colors.surfaceBorder, marginVertical: 10 },
-  mapContainer: { flex: 1, position: "relative" },
+  metricItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: theme.spacing.sm,
+  },
+  metricTitle: {
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.xs,
+    marginBottom: 4,
+  },
+  metricNumber: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.size.lg,
+  },
+  metricDivider: {
+    width: 1,
+    marginVertical: 8,
+    backgroundColor: theme.colors.borderSubtle,
+  },
+  routeNode: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.primaryCyan,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.45)",
+  },
   startMarker: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: Colors.cyan,
+    backgroundColor: theme.colors.primaryCyan,
     borderWidth: 3,
-    borderColor: Colors.background,
+    borderColor: theme.colors.backgroundDeep,
   },
-  playerMarkerContainer: { width: 60, height: 60, justifyContent: "center", alignItems: "center" },
+  playerMarkerContainer: {
+    width: 60,
+    height: 60,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   playerPulse: {
     position: "absolute",
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.cyan,
+    backgroundColor: theme.colors.primaryCyan,
   },
   playerDot: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.cyan,
+    backgroundColor: theme.colors.primaryCyan,
     borderWidth: 3,
-    borderColor: Colors.background,
+    borderColor: theme.colors.backgroundDeep,
   },
-  rivalBadge: {
+  rightPowerPanel: {
     position: "absolute",
-    bottom: 16,
-    alignSelf: "center",
+    right: theme.spacing.md,
+    top: "36%",
+    width: 96,
+    gap: theme.spacing.xs,
+  },
+  rightPowerPanelCompact: {
+    top: "28%",
+  },
+  powerCardContent: {
+    gap: 4,
+    alignItems: "center",
+  },
+  powerRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(26, 20, 40, 0.92)",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: `${Colors.warning}50`,
+    gap: 6,
   },
-  rivalBadgeIcon: { fontSize: 14 },
-  rivalBadgeText: { fontSize: 13, fontWeight: "600", color: Colors.warning },
-  speedBadge: {
+  powerLabel: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.xs,
+  },
+  powerValue: {
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.size.base,
+  },
+  actionCircle: {
+    width: 96,
+    minHeight: 54,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 6,
+  },
+  actionCircleCompact: {
+    width: 56,
+    minHeight: 48,
+    borderRadius: theme.radius.sm,
+  },
+  actionCircleIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(0, 229, 204, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 3,
+  },
+  actionCircleText: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 11,
+  },
+  warningBadge: {
     position: "absolute",
-    top: 12,
+    top: "31%",
     alignSelf: "center",
-    backgroundColor: `${Colors.coral}20`,
+    backgroundColor: "rgba(255, 77, 77, 0.20)",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: theme.radius.full,
     borderWidth: 1,
-    borderColor: `${Colors.coral}60`,
+    borderColor: "rgba(255, 77, 77, 0.55)",
   },
-  speedBadgeText: { fontSize: 12, fontWeight: "600", color: Colors.coral },
-  bottomPanel: {
-    backgroundColor: Colors.background,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.surfaceBorder,
+  warningText: {
+    color: theme.colors.danger,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.sm,
   },
-  closeDistSection: { marginBottom: 16 },
-  closeDistRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  closeDistLabel: { fontSize: 10, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1 },
-  closeDistValue: { fontSize: 12, fontWeight: "700", color: Colors.cyan },
-  closeTrack: {
-    height: 4,
-    backgroundColor: Colors.surfaceBorder,
-    borderRadius: 2,
-    overflow: "hidden",
+  rewardSignal: {
+    position: "absolute",
+    alignSelf: "center",
+    backgroundColor: "rgba(255, 200, 87, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 200, 87, 0.46)",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: theme.radius.full,
   },
-  closeBar: { height: "100%", borderRadius: 2 },
-  actionRow: { flexDirection: "row", gap: 12 },
-  pauseBtn: {
+  rewardSignalText: {
+    color: theme.colors.goldReward,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.xs,
+  },
+  bottomOverlay: {
+    position: "absolute",
+    left: theme.spacing.md,
+    right: theme.spacing.md,
+    bottom: 0,
+    gap: theme.spacing.sm,
+  },
+  bottomActionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: Colors.surfaceSolid,
-    paddingHorizontal: 20,
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+    justifyContent: "space-between",
+    gap: theme.spacing.sm,
   },
-  pauseTxt: { fontSize: 14, fontWeight: "600", color: Colors.textPrimary },
-  captureBtn: {
+  bottomActionsRowCompact: {
+    gap: theme.spacing.xs,
+  },
+  finishButton: {
     flex: 1,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: "center",
+    minHeight: 64,
+    borderRadius: theme.radius.lg,
+    backgroundColor: "rgba(255, 77, 77, 0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 138, 138, 0.75)",
     alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.sm,
   },
-  captureBtnDefault: { backgroundColor: `${Colors.cyan}30`, borderWidth: 1, borderColor: Colors.cyan },
-  captureBtnReady: { backgroundColor: Colors.emerald },
-  captureBtnResult: { backgroundColor: Colors.cyan },
-  captureTxt: { fontSize: 16, fontWeight: "700", color: Colors.textPrimary },
+  finishButtonCompact: {
+    minHeight: 58,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  finishTitle: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.size.base,
+  },
+  finishSubtitle: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.85)",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.xs,
+  },
+  gpsStatusRow: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    backgroundColor: theme.colors.surfaceCard,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  gpsStatusText: {
+    color: theme.colors.success,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.xs,
+  },
+  gpsDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.textMuted,
+  },
+  gpsSpeedText: {
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.xs,
+  },
+  pressed: {
+    opacity: 0.86,
+  },
 });
+

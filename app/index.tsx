@@ -1,93 +1,133 @@
-import { useEffect, useRef } from "react";
+﻿import { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";
-import { Colors } from "@/constants/colors";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "@/constants/theme";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Pentagon shape as a View composition
-function PentagonIcon({ size = 80 }: { size?: number }) {
-  return (
-    <View style={[styles.pentagonOuter, { width: size, height: size }]}>
-      <View style={styles.pentagonInner}>
-        <View style={styles.pentagonDot} />
-      </View>
-    </View>
-  );
-}
+import { useAuth } from "@/lib/auth";
+import { AlanGoLogo, AvatarPlaceholder, GlassCard } from "@/components/ui";
+import { GlowPulseView, ShimmerBadge } from "@/components/motion";
+import { AmbientGlow, ParticleDots } from "@/components/fx";
+import { getScreenBottomPadding } from "@/constants/safeArea";
+import { ROUTES } from "@/constants/routes";
 
 export default function SplashScreen() {
   const router = useRouter();
+  const { session, loading } = useAuth();
+  const insets = useSafeAreaInsets();
   const glowAnim = useRef(new Animated.Value(0.6)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.9)).current;
+  const sloganOpacity = useRef(new Animated.Value(0)).current;
+  const sloganY = useRef(new Animated.Value(10)).current;
+  const ringRotate = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
 
-    Animated.loop(
+    Animated.parallel([
+      Animated.timing(logoOpacity, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.timing(logoScale, { toValue: 1, duration: 460, useNativeDriver: true }),
+      Animated.timing(sloganOpacity, { toValue: 1, duration: 380, delay: 180, useNativeDriver: true }),
+      Animated.timing(sloganY, { toValue: 0, duration: 380, delay: 180, useNativeDriver: true }),
+    ]).start();
+
+    const glowLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
         Animated.timing(glowAnim, { toValue: 0.6, duration: 1800, useNativeDriver: true }),
       ])
-    ).start();
+    );
+
+    const ringLoop = Animated.loop(
+      Animated.timing(ringRotate, {
+        toValue: 1,
+        duration: 4800,
+        useNativeDriver: true,
+      })
+    );
+
+    glowLoop.start();
+    ringLoop.start();
 
     Animated.timing(progressAnim, { toValue: 1, duration: 2600, useNativeDriver: false }).start();
 
+    return () => {
+      glowLoop.stop();
+      ringLoop.stop();
+    };
+  }, [fadeAnim, glowAnim, logoOpacity, logoScale, progressAnim, ringRotate, sloganOpacity, sloganY]);
+
+  const ringSpin = ringRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  useEffect(() => {
+    if (loading) return;
+
     const timer = setTimeout(async () => {
-      const done = await AsyncStorage.getItem("alango_onboarding_done");
-      if (done === "true") {
-        router.replace("/(tabs)/map");
+      if (session) {
+        router.replace(ROUTES.tabs.map);
       } else {
-        router.replace("/(onboarding)/step1");
+        const done = await AsyncStorage.getItem("alango_onboarding_done");
+        if (done === "true") {
+          router.replace(ROUTES.auth.signin);
+        } else {
+          router.replace(ROUTES.onboarding.step1);
+        }
       }
-    }, 3200);
+    }, 2500);
     return () => clearTimeout(timer);
-  }, [router, glowAnim, progressAnim, fadeAnim]);
+  }, [loading, session, router]);
 
   return (
     <SafeAreaView style={styles.container}>
+      <AmbientGlow cyanOpacity={0.08} purpleOpacity={0.08} />
+      <ParticleDots count={12} color="rgba(0, 229, 204, 0.48)" />
       {/* Background glow blobs */}
       <Animated.View style={[styles.glowBlob1, { opacity: glowAnim }]} />
       <Animated.View style={[styles.glowBlob2, { opacity: glowAnim }]} />
 
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-        {/* App icon */}
-        <View style={styles.iconWrapper}>
-          <Animated.View style={[styles.iconGlow, { opacity: glowAnim }]} />
-          <View style={styles.iconContainer}>
-            <View style={styles.iconBg}>
-              <PentagonIcon size={52} />
+        <GlassCard contentStyle={styles.logoPanelContent} style={styles.logoPanel}>
+          <Animated.View style={[styles.iconWrapper, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
+            <Animated.View style={[styles.logoRing, { transform: [{ rotate: ringSpin }], opacity: glowAnim }]} />
+            <Animated.View style={[styles.iconGlow, { opacity: glowAnim }]} />
+            <View style={styles.iconContainer}>
+              <AlanGoLogo size="lg" glow="none" />
             </View>
+          </Animated.View>
+
+          <Animated.Text style={[styles.tagline, { opacity: sloganOpacity, transform: [{ translateY: sloganY }] }]}>Ciz, Kapat, Fethet!</Animated.Text>
+          <View style={styles.characterPlaceholderRow}>
+            <AvatarPlaceholder initials="AL" size={34} style={styles.characterPlaceholder} />
+            <AvatarPlaceholder initials="GO" size={34} style={styles.characterPlaceholder} />
+            <AvatarPlaceholder initials="XP" size={34} style={styles.characterPlaceholder} />
           </View>
-        </View>
-
-        {/* Title */}
-        <View style={styles.titleRow}>
-          <Text style={styles.titleAlan}>Alan</Text>
-          <Text style={styles.titleGO}>GO</Text>
-        </View>
-
-        {/* Tagline */}
-        <Text style={styles.tagline}>ELE GEÇİR · SAVUN · HÜKMET</Text>
+        </GlassCard>
       </Animated.View>
 
       {/* Bottom loading section */}
-      <View style={styles.loadingSection}>
-        <View style={styles.progressTrack}>
-          <Animated.View
-            style={[
-              styles.progressBar,
-              {
-                width: progressAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ["0%", "100%"],
-                }),
-              },
-            ]}
-          />
-        </View>
-        <Text style={styles.loadingText}>BAĞLANIYOR</Text>
+      <View style={[styles.loadingSection, { paddingBottom: getScreenBottomPadding(insets.bottom, theme.spacing.xl) }]}>
+        <GlowPulseView duration={560} minOpacity={0.82} maxOpacity={1}>
+          <ShimmerBadge style={styles.progressTrack} shimmerColor="rgba(0, 229, 204, 0.24)">
+            <Animated.View
+              style={[
+                styles.progressBar,
+                {
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ["0%", "100%"],
+                  }),
+                },
+              ]}
+            />
+          </ShimmerBadge>
+        </GlowPulseView>
+        <Text style={styles.loadingText}>YÃ¼kleniyor...</Text>
       </View>
     </SafeAreaView>
   );
@@ -96,7 +136,7 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.colors.backgroundDeep,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -105,9 +145,9 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: Colors.cyan,
+    backgroundColor: theme.colors.primaryCyan,
     opacity: 0.06,
-    top: "15%",
+    top: "10%",
     left: "-20%",
   },
   glowBlob2: {
@@ -115,117 +155,101 @@ const styles = StyleSheet.create({
     width: 250,
     height: 250,
     borderRadius: 125,
-    backgroundColor: Colors.purple,
+    backgroundColor: theme.colors.purple,
     opacity: 0.08,
-    bottom: "20%",
+    bottom: "12%",
     right: "-15%",
   },
   content: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    width: "100%",
+    paddingHorizontal: theme.spacing.xl,
+  },
+  logoPanel: {
+    width: "100%",
+    maxWidth: 360,
+  },
+  logoPanelContent: {
+    alignItems: "center",
+    paddingVertical: theme.spacing.xxl,
   },
   iconWrapper: {
     position: "relative",
-    marginBottom: 32,
+    marginBottom: theme.spacing.xl,
   },
   iconGlow: {
     position: "absolute",
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: Colors.cyan,
+    backgroundColor: theme.colors.primaryCyan,
     opacity: 0.15,
     top: -20,
     left: -20,
   },
+  logoRing: {
+    position: "absolute",
+    width: 168,
+    height: 168,
+    borderRadius: 84,
+    top: -24,
+    left: -24,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 204, 0.45)",
+    borderTopColor: "rgba(139, 92, 246, 0.45)",
+    borderBottomColor: "rgba(0, 229, 204, 0.16)",
+  },
   iconContainer: {
-    width: 120,
+    width: 180,
     height: 120,
     borderRadius: 28,
-    backgroundColor: "rgba(91, 200, 224, 0.15)",
+    backgroundColor: "rgba(0, 229, 204, 0.12)",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: "rgba(91, 200, 224, 0.3)",
-  },
-  iconBg: {
-    width: 88,
-    height: 88,
-    borderRadius: 20,
-    backgroundColor: "rgba(91, 200, 224, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // Pentagon approximation
-  pentagonOuter: {
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 3,
-    borderColor: Colors.cyan,
-    borderRadius: 8,
-    transform: [{ rotate: "0deg" }],
-  },
-  pentagonInner: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: Colors.cyan,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pentagonDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.cyan,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 16,
-  },
-  titleAlan: {
-    fontSize: 52,
-    fontWeight: "800",
-    color: Colors.textPrimary,
-    letterSpacing: -1,
-  },
-  titleGO: {
-    fontSize: 52,
-    fontWeight: "800",
-    color: Colors.cyan,
-    letterSpacing: -1,
+    borderColor: "rgba(0, 229, 204, 0.3)",
   },
   tagline: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: Colors.textMuted,
-    letterSpacing: 3,
+    marginTop: theme.spacing.sm,
+    fontSize: theme.typography.size.base,
+    fontFamily: theme.typography.fontFamily.medium,
+    color: theme.colors.textSecondary,
+  },
+  characterPlaceholderRow: {
+    marginTop: theme.spacing.lg,
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+  },
+  characterPlaceholder: {
+    width: 34,
+    height: 34,
   },
   loadingSection: {
-    width: "60%",
+    width: "72%",
     alignItems: "center",
-    paddingBottom: 56,
   },
   progressTrack: {
     width: "100%",
-    height: 2,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 1,
+    height: 6,
+    backgroundColor: theme.colors.surfaceLight,
+    borderRadius: theme.radius.full,
     overflow: "hidden",
-    marginBottom: 14,
+    marginBottom: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
   },
   progressBar: {
     height: "100%",
-    backgroundColor: Colors.cyan,
+    backgroundColor: theme.colors.primaryCyan,
     borderRadius: 1,
   },
   loadingText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.textMuted,
-    letterSpacing: 3,
+    fontSize: theme.typography.size.sm,
+    fontFamily: theme.typography.fontFamily.medium,
+    color: theme.colors.textMuted,
+    letterSpacing: 0.4,
   },
 });
+

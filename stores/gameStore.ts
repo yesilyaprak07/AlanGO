@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import polygonClipping from "polygon-clipping";
+import { supabase } from "@/lib/supabase";
 
 export interface LatLng {
   latitude: number;
@@ -123,6 +124,7 @@ interface GameState {
   addTerritory: (t: Omit<Territory, "id" | "createdAt" | "color">) => void;
   setLastRun: (run: GameState["lastRun"]) => void;
   loadTerritories: () => Promise<void>;
+  saveGameSession: (session: { polygon: LatLng[]; area: number; distance: number; duration: number; xpEarned: number; goldEarned: number }) => Promise<void>;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -140,12 +142,63 @@ export const useGameStore = create<GameState>((set, get) => ({
     const updated = mergeOverlapping(get().territories, territory);
     const totalArea = updated.reduce((s, ter) => s + ter.area, 0);
     set({ territories: updated, totalArea });
+
+    // Save locally
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+
+    // Sync to Supabase
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const userId = session.user.id;
+
+      // Delete old territories for this user and re-insert merged ones
+      await supabase.from("territories").delete().eq("user_id", userId);
+      const rows = updated.map((ter) => ({
+        user_id: userId,
+        polygon: ter.polygon,
+        area: ter.area,
+        distance: ter.distance,
+        duration: ter.duration,
+        color: ter.color,
+      }));
+      if (rows.length > 0) {
+        await supabase.from("territories").insert(rows);
+      }
+    })().catch(() => {});
   },
 
   setLastRun: (run) => set({ lastRun: run }),
 
   loadTerritories: async () => {
+    // Try loading from Supabase first
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { data, error } = await supabase
+        .from("territories")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: true });
+
+      if (data && !error && data.length > 0) {
+        const territories: Territory[] = data.map((row: any) => ({
+          id: row.id,
+          polygon: row.polygon as LatLng[],
+          area: row.area,
+          distance: row.distance,
+          duration: row.duration,
+          createdAt: new Date(row.created_at).getTime(),
+          color: row.color || "rgba(0, 240, 255, 0.25)",
+        }));
+        const totalArea = territories.reduce((s, t) => s + t.area, 0);
+        set({ territories, totalArea });
+        // Also cache locally
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(territories)).catch(() => {});
+        return;
+      }
+    }
+
+    // Fallback to local storage
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -154,5 +207,53 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({ territories, totalArea });
       }
     } catch {}
+  },
+
+  saveGameSession: async (session) => {
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    if (!authSession?.user) return;
+
+    const xpEarned = session.xpEarned;
+    const goldEarned = session.goldEarned;
+
+    // Save game session record
+    await supabase.from("game_sessions").insert({
+      user_id: authSession.user.id,
+      polygon: session.polygon,
+      area: session.area,
+      distance: session.distance,
+      duration: session.duration,
+      xp_earned: xpEarned,
+      gold_earned: goldEarned,
+    });
+
+    // Update user XP and gold
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("xp, gold, level")
+      .eq("id", authSession.user.id)
+      .single();
+
+    if (profile) {
+      const newXp = profile.xp + xpEarned;
+      const newGold = profile.gold + goldEarned;
+      // Level up every 1000 XP
+      const newLevel = Math.floor(newXp / 1000) + 1;
+      // Rank title based on XP
+      let rankTitle = "ÇAYLAK";
+      if (newXp >= 50000) rankTitle = "GENERAL";
+      else if (newXp >= 25000) rankTitle = "ALBAY";
+      else if (newXp >= 10000) rankTitle = "KOMUTAN";
+      else if (newXp >= 5000) rankTitle = "YÜZBAŞI";
+      else if (newXp >= 2000) rankTitle = "TEĞMEN";
+      else if (newXp >= 500) rankTitle = "ÇAVUŞ";
+
+      await supabase.from("profiles").update({
+        xp: newXp,
+        gold: newGold,
+        level: newLevel,
+        rank_title: rankTitle,
+      }).eq("id", authSession.user.id);
+    }
   },
 }));

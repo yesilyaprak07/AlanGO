@@ -1,336 +1,390 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from "react-native";
-import { useRouter } from "expo-router";
+﻿import React, { useMemo } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import {
+  Award,
+  Bell,
+  Crown,
+  Flame,
+  Map as MapIcon,
+  ShoppingBag,
+  Target,
+  Trophy,
+  User,
+} from "lucide-react-native";
+import { BottomTabBar, GlassCard, IconBadge, NeonButton, StatCard } from "@/components/ui";
+import { theme } from "@/constants/theme";
+import { useAuth } from "@/lib/auth";
+import { useGameStore } from "@/stores/gameStore";
+import { ROUTES } from "@/constants/routes";
+import { getTabContentBottomSpace, isNarrowWidth } from "@/constants/safeArea";
 
-const { width } = Dimensions.get("window");
-
-const STATS = [
-  { id: 1, label: "TOPLAM BÖLGE", value: "42.6", unit: "km²", icon: "📍", color: Colors.cyan },
-  { id: 2, label: "SAVUNULAN", value: "128", unit: "saldırı", icon: "🛡️", color: Colors.emerald },
-  { id: 3, label: "ÇALINAN", value: "86", unit: "bölge", icon: "⚔️", color: Colors.coral },
-  { id: 4, label: "GALİBİYET", value: "214W / 18L", unit: "", icon: "🏆", color: Colors.gold },
-];
-
-const MEDALS = [
-  { id: 1, icon: "👑", label: "Kral", earned: true },
-  { id: 2, icon: "⭐", label: "Elite", earned: true },
-  { id: 3, icon: "🎖️", label: "Savaşçı", earned: true },
-  { id: 4, icon: "🛡️", label: "Savunma", earned: true },
-  { id: 5, icon: "⚔️", label: "Saldırı", earned: false },
-  { id: 6, icon: "🏃", label: "Koşucu", earned: false },
-];
-
-const WEEKLY_DATA = [
-  { day: "Pzt", val: 40 },
-  { day: "Sal", val: 65 },
-  { day: "Çar", val: 45 },
-  { day: "Per", val: 80 },
-  { day: "Cum", val: 55 },
-  { day: "Cmt", val: 90 },
-  { day: "Paz", val: 70 },
-];
+type BottomKey = "map" | "missions" | "feed" | "notifications" | "profile";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const level = 24;
-  const xpCurrent = 2340;
-  const xpNext = 3000;
-  const xpPct = (xpCurrent / xpNext) * 100;
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const narrow = isNarrowWidth(width);
+  const { profile } = useAuth();
+  const { territories, totalArea } = useGameStore();
+
+  const username = profile?.username ?? "Caner";
+  const level = profile?.level ?? 12;
+  const currentXp = profile?.xp ?? 7800;
+  const nextLevelXp = Math.max(level * 1000, 12000);
+  const xpPct = Math.min((currentXp / nextLevelXp) * 100, 100);
+  const totalAreaM2 = Math.round(totalArea > 0 ? totalArea : 12450);
+
+  const initials = useMemo(() => username.slice(0, 2).toUpperCase(), [username]);
+
+  const stats = [
+    {
+      title: "Toplam Alan",
+      value: `${totalAreaM2.toLocaleString("tr-TR")} mÂ²`,
+      icon: <IconBadge tone="cyan" icon={<MapIcon size={16} color={theme.colors.primaryCyan} />} size={34} />,
+      subtitle: "TÃ¼m sezon",
+    },
+    {
+      title: "Fethedilen BÃ¶lge",
+      value: territories.length > 0 ? territories.length : 18,
+      icon: <IconBadge tone="purple" icon={<Target size={16} color={theme.colors.purple} />} size={34} />,
+      subtitle: "Aktif bÃ¶lge",
+    },
+    {
+      title: "KazanÄ±lan Ã–dÃ¼l",
+      value: "â‚º1.000",
+      icon: <IconBadge tone="gold" icon={<Trophy size={16} color={theme.colors.goldReward} />} size={34} />,
+      subtitle: "Son keÅŸif",
+    },
+    {
+      title: "GÃ¼nlÃ¼k Seri",
+      value: "7 gÃ¼n",
+      icon: <IconBadge tone="success" icon={<Flame size={16} color={theme.colors.success} />} size={34} />,
+      subtitle: "Kesintisiz",
+    },
+  ];
+
+  const taskItems = ["3 alan fethet", "2 km yÃ¼rÃ¼", "1 rakip alanÄ± ele geÃ§ir"];
+  const badges = ["Ä°lk Fetih", "Gizli Ã–dÃ¼l AvcÄ±sÄ±", "Mahalle Lideri"];
+  const recentGains = ["1.000 TL Ã¶dÃ¼l bulundu", "450 mÂ² alan fethedildi", "Radar kullanÄ±ldÄ±"];
+
+  const bottomTabs = [
+    { key: "map" as const, label: "Harita", icon: <MapIcon size={16} color={theme.colors.textMuted} /> },
+    { key: "missions" as const, label: "GÃ¶rev", icon: <Target size={16} color={theme.colors.textMuted} /> },
+    { key: "feed" as const, label: "Feed", icon: <ShoppingBag size={16} color={theme.colors.textMuted} /> },
+    { key: "notifications" as const, label: "Bildirim", icon: <Bell size={16} color={theme.colors.textMuted} /> },
+    { key: "profile" as const, label: "Ben", icon: <User size={16} color={theme.colors.primaryCyan} /> },
+  ];
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero section */}
-        <View style={styles.hero}>
-          {/* Rank badge */}
-          <View style={styles.rankBadge}>
-            <Text style={styles.rankEmoji}>👑</Text>
-            <Text style={styles.rankText}>ELİTE KOMUTAN</Text>
-          </View>
+      <View style={styles.glowTop} />
+      <View style={styles.glowBottom} />
 
-          {/* Avatar */}
-          <View style={styles.avatarWrapper}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: getTabContentBottomSpace(insets.bottom, 24) }]}
+        showsVerticalScrollIndicator={false}
+        decelerationRate="fast"
+      >
+        <GlassCard style={styles.heroCard} contentStyle={styles.heroContent}>
+          <View style={styles.avatarWrap}>
             <View style={styles.avatarGlow} />
-            <View style={styles.avatarHex}>
-              <View style={styles.avatarInner}>
-                <Text style={styles.avatarInitials}>AY</Text>
-              </View>
-              <View style={styles.levelBadge}>
-                <Text style={styles.levelText}>LV {level}</Text>
-              </View>
+            <View style={styles.avatarOuter}>
+              <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
+            <Pressable style={({ pressed }) => [styles.premiumBadge, pressed && styles.pressed]} onPress={() => router.push(ROUTES.premium)}>
+              <Crown size={12} color={theme.colors.backgroundDeep} />
+              <Text style={styles.premiumText}>PREMIUM</Text>
+            </Pressable>
           </View>
 
-          {/* Name */}
-          <Text style={styles.fullName}>Ahmet "Komutan" Yılmaz</Text>
-          <Text style={styles.location}>Karşıyaka, İzmir</Text>
+          <Text style={styles.username}>{username}</Text>
+          <Text style={styles.level}>Level {level}</Text>
 
-          {/* Ranking */}
-          <TouchableOpacity style={styles.rankRow} onPress={() => router.push("/(tabs)/leaderboard")}>
-            <Text style={styles.rankingText}>Sıralama</Text>
-            <Text style={styles.rankingValue}>#142</Text>
-            <Text style={styles.rankingArrow}>›</Text>
-          </TouchableOpacity>
-
-          {/* XP bar */}
-          <View style={styles.xpSection}>
-            <View style={styles.xpRow}>
-              <Text style={styles.xpLabel}>SONRAKI RÜTBE · GENERAL</Text>
-              <Text style={styles.xpValue}>{xpCurrent.toLocaleString()} / {xpNext.toLocaleString()} XP</Text>
-            </View>
-            <View style={styles.xpTrack}>
-              <View style={[styles.xpBar, { width: `${xpPct}%` }]} />
-            </View>
+          <View style={styles.xpRow}>
+            <Text style={styles.xpLabel}>XP</Text>
+            <Text style={styles.xpValue}>{currentXp.toLocaleString("tr-TR")} / {nextLevelXp.toLocaleString("tr-TR")}</Text>
           </View>
+          <View style={styles.xpTrack}>
+            <View style={[styles.xpBar, { width: `${xpPct}%` }]} />
+          </View>
+
+          <View style={styles.heroActions}>
+            <NeonButton label="Gorevler" size="sm" onPress={() => router.push(ROUTES.tabs.missions)} />
+            <NeonButton label="Ayarlar" size="sm" variant="ghost" onPress={() => router.push(ROUTES.tabs.settings)} />
+          </View>
+        </GlassCard>
+
+        <View style={[styles.statsGrid, narrow && styles.statsGridNarrow]}>
+          {stats.map((item) => (
+            <StatCard
+              key={item.title}
+              title={item.title}
+              value={item.value}
+              subtitle={item.subtitle}
+              icon={item.icon}
+              style={[styles.statItem, narrow && styles.statItemNarrow]}
+            />
+          ))}
         </View>
 
-        {/* War record stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SAVAŞ KAYDI</Text>
-          <View style={styles.statsGrid}>
-            {STATS.map((stat) => (
-              <View key={stat.id} style={styles.statCard}>
-                <Text style={styles.statIcon}>{stat.icon}</Text>
-                <Text style={[styles.statValue, { color: stat.color }]}>
-                  {stat.value}
-                  {stat.unit ? <Text style={styles.statUnit}> {stat.unit}</Text> : null}
-                </Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
+        <GlassCard contentStyle={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>BugÃ¼nkÃ¼ GÃ¶revler</Text>
+          {taskItems.map((task, idx) => (
+            <View key={task} style={styles.listRow}>
+              <IconBadge tone={idx === 2 ? "gold" : "cyan"} icon={idx === 2 ? "â˜…" : "âœ“"} size={28} />
+              <Text style={styles.listText}>{task}</Text>
+            </View>
+          ))}
+        </GlassCard>
+
+        <GlassCard contentStyle={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Rozetler</Text>
+          <View style={styles.badgesRow}>
+            {badges.map((badge, idx) => (
+              <View key={badge} style={styles.badgeItem}>
+                <IconBadge tone={idx === 1 ? "gold" : "cyan"} icon={<Award size={15} color={idx === 1 ? theme.colors.goldReward : theme.colors.primaryCyan} />} size={34} active={idx === 1} />
+                <Text style={styles.badgeLabel}>{badge}</Text>
               </View>
             ))}
           </View>
-        </View>
+        </GlassCard>
 
-        {/* Weekly chart */}
-        <View style={styles.section}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.sectionTitle}>BU HAFTA</Text>
-            <Text style={styles.chartSub}>km² fethedilen alan</Text>
-          </View>
-          <View style={styles.chartCard}>
-            {WEEKLY_DATA.map((item, i) => (
-              <View key={i} style={styles.barCol}>
-                <View style={styles.barWrapper}>
-                  <View style={[styles.bar, { height: `${item.val}%`, backgroundColor: i === 5 ? Colors.purple : Colors.cyan }]} />
-                </View>
-                <Text style={styles.barLabel}>{item.day}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+        <GlassCard contentStyle={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Son KazanÄ±mlar</Text>
+          {recentGains.map((item, idx) => (
+            <Pressable
+              key={item}
+              style={({ pressed }) => [styles.gainRow, pressed && styles.pressed]}
+              onPress={() => {
+                if (idx === 0) {
+                  router.push(ROUTES.hiddenRewardFound);
+                  return;
+                }
+              }}
+            >
+              <IconBadge tone={idx === 0 ? "gold" : "neutral"} icon={idx === 0 ? "ğŸ†" : "â€¢"} size={28} />
+              <Text style={styles.listText}>{item}</Text>
+            </Pressable>
+          ))}
+        </GlassCard>
 
-        {/* Medals */}
-        <View style={styles.section}>
-          <View style={styles.medalsHeader}>
-            <Text style={styles.sectionTitle}>MADALYALAR</Text>
-            <Text style={styles.medalsCount}>4 / 6</Text>
-          </View>
-          <View style={styles.medalsRow}>
-            {MEDALS.map((medal) => (
-              <View key={medal.id} style={[styles.medalItem, !medal.earned && styles.medalLocked]}>
-                <Text style={[styles.medalEmoji, !medal.earned && styles.medalEmojiLocked]}>
-                  {medal.icon}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Actions */}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionBtn}>
-            <Text style={styles.actionIcon}>📤</Text>
-            <Text style={styles.actionText}>Paylaş</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/(tabs)/leaderboard")}>
-            <Text style={styles.actionIcon}>🏆</Text>
-            <Text style={styles.actionText}>Liderlik</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/(tabs)/settings")}>
-            <Text style={styles.actionIcon}>⚙️</Text>
-            <Text style={styles.actionText}>Ayarlar</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 32 }} />
       </ScrollView>
+
+      <BottomTabBar<BottomKey>
+        tabs={bottomTabs}
+        activeKey="profile"
+        onTabPress={(key) => {
+          if (key === "map") router.push(ROUTES.tabs.map);
+          if (key === "missions") router.push(ROUTES.tabs.missions);
+          if (key === "feed") router.push(ROUTES.tabs.feed);
+          if (key === "notifications") router.push(ROUTES.tabs.notifications);
+          if (key === "profile") return;
+        }}
+        style={styles.bottomTabs}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-
-  // Hero
-  hero: {
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceBorder,
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.backgroundDeep,
   },
-  rankBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: `${Colors.gold}18`,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: `${Colors.gold}40`,
-    marginBottom: 20,
+  glowTop: {
+    position: "absolute",
+    top: -80,
+    right: -80,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: "rgba(0, 229, 204, 0.08)",
   },
-  rankEmoji: { fontSize: 14 },
-  rankText: { fontSize: 11, fontWeight: "800", color: Colors.gold, letterSpacing: 1.5 },
-  avatarWrapper: { position: "relative", marginBottom: 16 },
+  glowBottom: {
+    position: "absolute",
+    bottom: -90,
+    left: -80,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: "rgba(255, 200, 87, 0.07)",
+  },
+  content: {
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
+    gap: theme.spacing.md,
+  },
+  heroCard: {
+    marginTop: theme.spacing.sm,
+  },
+  heroContent: {
+    alignItems: "center",
+  },
+  avatarWrap: {
+    marginTop: 4,
+    marginBottom: theme.spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   avatarGlow: {
     position: "absolute",
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: Colors.cyan,
-    opacity: 0.1,
-    top: -20,
-    left: -20,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: "rgba(0, 229, 204, 0.12)",
   },
-  avatarHex: {
-    width: 120,
-    height: 120,
-    borderRadius: 24,
-    borderWidth: 2.5,
-    borderColor: Colors.cyan,
-    backgroundColor: `${Colors.cyan}12`,
-    justifyContent: "center",
+  avatarOuter: {
+    width: 92,
+    height: 92,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: "rgba(0, 229, 204, 0.58)",
+    backgroundColor: "rgba(0, 229, 204, 0.08)",
     alignItems: "center",
-    position: "relative",
-  },
-  avatarInner: {
-    width: 96,
-    height: 96,
-    borderRadius: 18,
-    backgroundColor: `${Colors.cyan}18`,
     justifyContent: "center",
-    alignItems: "center",
   },
-  avatarInitials: { fontSize: 38, fontWeight: "800", color: Colors.cyan },
-  levelBadge: {
+  avatarInitials: {
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 32,
+    letterSpacing: 0.6,
+  },
+  premiumBadge: {
     position: "absolute",
-    bottom: -10,
-    backgroundColor: Colors.purple,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: Colors.background,
-  },
-  levelText: { fontSize: 11, fontWeight: "800", color: Colors.textPrimary },
-  fullName: { fontSize: 22, fontWeight: "800", color: Colors.textPrimary, marginBottom: 4, textAlign: "center" },
-  location: { fontSize: 14, color: Colors.textSecondary, marginBottom: 12 },
-  rankRow: {
+    bottom: -8,
     flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: theme.radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255, 200, 87, 0.42)",
+    backgroundColor: "rgba(255, 200, 87, 0.88)",
+  },
+  premiumText: {
+    color: theme.colors.backgroundDeep,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 10,
+  },
+  username: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 26,
+    lineHeight: 32,
+  },
+  level: {
+    marginTop: 2,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.base,
+  },
+  xpRow: {
+    width: "100%",
+    marginTop: theme.spacing.md,
+    marginBottom: 6,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  xpLabel: {
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.xs,
+  },
+  xpValue: {
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.xs,
+  },
+  xpTrack: {
+    width: "100%",
+    height: 7,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.surfaceLight,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  xpBar: {
+    height: "100%",
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.primaryCyan,
+  },
+  heroActions: {
+    marginTop: theme.spacing.md,
+    width: "100%",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "space-between",
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+  },
+  statsGridNarrow: {
+    flexDirection: "column",
+  },
+  statItem: {
+    width: "48.5%",
+  },
+  statItemNarrow: {
+    width: "100%",
+  },
+  sectionCard: {
+    gap: theme.spacing.xs,
+  },
+  sectionTitle: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.base,
+    marginBottom: 4,
+  },
+  listRow: {
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  listText: {
+    flex: 1,
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.sm,
+  },
+  badgesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: theme.spacing.xs,
+  },
+  badgeItem: {
+    flex: 1,
     alignItems: "center",
     gap: 6,
-    marginBottom: 20,
+    paddingVertical: 4,
   },
-  rankingText: { fontSize: 13, color: Colors.textSecondary },
-  rankingValue: { fontSize: 14, fontWeight: "700", color: Colors.cyan },
-  rankingArrow: { fontSize: 14, color: Colors.cyan },
-  xpSection: { width: "100%" },
-  xpRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  xpLabel: { fontSize: 10, fontWeight: "700", color: Colors.textMuted, letterSpacing: 0.5 },
-  xpValue: { fontSize: 11, color: Colors.cyan, fontWeight: "600" },
-  xpTrack: {
-    height: 5,
-    backgroundColor: Colors.surfaceBorder,
-    borderRadius: 3,
-    overflow: "hidden",
+  badgeLabel: {
+    textAlign: "center",
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 11,
+    lineHeight: 14,
   },
-  xpBar: { height: "100%", backgroundColor: Colors.purple, borderRadius: 3 },
-
-  // Sections
-  section: { paddingHorizontal: 20, paddingTop: 24, marginBottom: 4 },
-  sectionTitle: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
-
-  // Stats grid
-  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  statCard: {
-    width: (width - 50) / 2,
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    gap: 4,
-  },
-  statIcon: { fontSize: 20 },
-  statValue: { fontSize: 18, fontWeight: "800" },
-  statUnit: { fontSize: 12, fontWeight: "500", color: Colors.textSecondary },
-  statLabel: { fontSize: 10, color: Colors.textMuted, letterSpacing: 0.5, fontWeight: "600" },
-
-  // Chart
-  chartHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  chartSub: { fontSize: 11, color: Colors.textMuted },
-  chartCard: {
+  gainRow: {
+    minHeight: 38,
     flexDirection: "row",
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    height: 130,
-    alignItems: "flex-end",
-  },
-  barCol: { flex: 1, alignItems: "center" },
-  barWrapper: {
-    width: 18,
-    height: 90,
-    backgroundColor: Colors.surfaceBorder,
-    borderRadius: 4,
-    overflow: "hidden",
-    justifyContent: "flex-end",
-    marginBottom: 6,
-  },
-  bar: { width: "100%", borderRadius: 4 },
-  barLabel: { fontSize: 9, color: Colors.textMuted },
-
-  // Medals
-  medalsHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
-  medalsCount: { fontSize: 12, color: Colors.cyan, fontWeight: "600" },
-  medalsRow: { flexDirection: "row", gap: 12 },
-  medalItem: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceSolid,
-    justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: `${Colors.gold}40`,
-  },
-  medalLocked: { opacity: 0.3, borderColor: Colors.surfaceBorder },
-  medalEmoji: { fontSize: 22 },
-  medalEmojiLocked: { opacity: 0.5 },
-
-  // Actions
-  actionsRow: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
     gap: 10,
-    marginTop: 24,
   },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+  bottomTabs: {
+    borderTopColor: theme.colors.borderSubtle,
   },
-  actionIcon: { fontSize: 20 },
-  actionText: { fontSize: 11, fontWeight: "600", color: Colors.textSecondary },
+  pressed: {
+    opacity: 0.86,
+  },
 });
+

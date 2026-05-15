@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useEffect, useRef, useState } from "react";
+import { ROUTES } from "@/constants/routes";
 
 export default function KillDeathScreen() {
   const router = useRouter();
@@ -12,22 +13,27 @@ export default function KillDeathScreen() {
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-    Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 0.6, duration: 800, useNativeDriver: true }),
       ])
-    ).start();
+    );
+
+    pulseLoop.start();
 
     const timer = setInterval(() => {
       setCountdown((c) => Math.max(0, c - 1));
     }, 1000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      pulseLoop.stop();
+    };
   }, [pulseAnim, fadeAnim]);
 
-  const handleIgnore = () => router.replace("/(tabs)/map");
-  const handleShield = () => router.replace("/(tabs)/map");
-  const handleCounter = () => router.push("/active-game");
+  const handleIgnore = () => router.replace(ROUTES.tabs.map);
+  const handleShield = () => router.replace(ROUTES.tabs.map);
+  const handleCounter = () => router.push(ROUTES.activeGame);
 
   const mm = String(Math.floor(countdown / 60)).padStart(2, "0");
   const ss = String(countdown % 60).padStart(2, "0");

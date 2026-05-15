@@ -1,293 +1,558 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
-import { useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Bell, Crown, Map as MapIcon, Shield, ShoppingBag, Target, User, Zap } from "lucide-react-native";
+import { BottomTabBar, GlassCard, IconBadge } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
+import { theme } from "@/constants/theme";
+import { GlowPulseView } from "@/components/motion";
+import { useFadeIn } from "@/hooks/useFadeIn";
+import { AmbientGlow, AnimatedGradient, NeonOutline } from "@/components/fx";
+import { ROUTES } from "@/constants/routes";
+import { getTabContentBottomSpace, isNarrowWidth } from "@/constants/safeArea";
 
-type Tab = "mahalle" | "sehir" | "ulke";
+type FilterKey = "mahalle" | "sehir" | "turkiye" | "dunya";
+type BottomKey = "map" | "missions" | "feed" | "notifications" | "profile";
 
-const TABS: { key: Tab; label: string }[] = [
+type PodiumPlayer = {
+  rank: 1 | 2 | 3;
+  name: string;
+  level: number;
+  area: string;
+  weeklyXp: string;
+};
+
+type RankedPlayer = {
+  rank: number;
+  initials: string;
+  username: string;
+  level: number;
+  totalArea: string;
+  weeklyXp: string;
+  premium: boolean;
+};
+
+const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "mahalle", label: "Mahalle" },
-  { key: "sehir", label: "Şehir" },
-  { key: "ulke", label: "Ülke" },
+  { key: "sehir", label: "Åehir" },
+  { key: "turkiye", label: "TÃ¼rkiye" },
+  { key: "dunya", label: "DÃ¼nya" },
 ];
 
-const PODIUM = [
-  { rank: 2, initials: "ZT", name: "Zehra.T", title: "GENERAL", area: "76.8 km²", color: Colors.silver },
-  { rank: 1, initials: "MK", name: "Mert_K", title: "HÜKÜMDAR", area: "84.2 km²", color: Colors.gold },
-  { rank: 3, initials: "B6", name: "Burak61", title: "GENERAL", area: "71.4 km²", color: Colors.bronze },
+const PODIUM: PodiumPlayer[] = [
+  { rank: 2, name: "ZehraT42", level: 29, area: "74.920 mÂ²", weeklyXp: "+6.100 XP" },
+  { rank: 1, name: "MertKing", level: 34, area: "89.450 mÂ²", weeklyXp: "+8.420 XP" },
+  { rank: 3, name: "Burak61", level: 27, area: "69.380 mÂ²", weeklyXp: "+5.760 XP" },
 ];
 
-const LIST = [
-  { rank: 4, initials: "EO", name: "Eylül_06", area: "68.1 km²", trend: "+2", isUser: false },
-  { rank: 5, initials: "AY", name: "Sen", area: "62.4 km²", trend: "+3", isUser: true },
-  { rank: 6, initials: "K9", name: "Koray99", area: "58.7 km²", trend: "-1", isUser: false },
-  { rank: 7, initials: "GP", name: "GPSMaster", area: "54.2 km²", trend: "0", isUser: false },
-  { rank: 8, initials: "TK", name: "TurkKral", area: "49.8 km²", trend: "+4", isUser: false },
+const RANKING: RankedPlayer[] = [
+  { rank: 4, initials: "EO", username: "Eylul06", level: 25, totalArea: "62.940 mÂ²", weeklyXp: "+4.800 XP", premium: true },
+  { rank: 5, initials: "KA", username: "KaanArena", level: 24, totalArea: "58.210 mÂ²", weeklyXp: "+4.100 XP", premium: false },
+  { rank: 6, initials: "AD", username: "AdaDrift", level: 23, totalArea: "56.870 mÂ²", weeklyXp: "+3.940 XP", premium: true },
+  { rank: 7, initials: "GP", username: "GPSMaster", level: 22, totalArea: "54.430 mÂ²", weeklyXp: "+3.650 XP", premium: false },
+  { rank: 8, initials: "TK", username: "TurkKral", level: 21, totalArea: "52.210 mÂ²", weeklyXp: "+3.410 XP", premium: true },
+  { rank: 9, initials: "AY", username: "Ays3", level: 21, totalArea: "50.930 mÂ²", weeklyXp: "+3.120 XP", premium: false },
+  { rank: 10, initials: "RZ", username: "RizaRun", level: 20, totalArea: "49.870 mÂ²", weeklyXp: "+2.980 XP", premium: false },
 ];
 
-function HexAvatar({ initials, color, size = 52 }: { initials: string; color: string; size?: number }) {
-  return (
-    <View style={[styles.hexAvatar, { width: size, height: size, borderRadius: size * 0.22, borderColor: color }]}>
-      <Text style={[styles.hexAvatarText, { color, fontSize: size * 0.32 }]}>{initials}</Text>
-    </View>
-  );
+function podiumPalette(rank: 1 | 2 | 3) {
+  if (rank === 1) {
+    return {
+      tone: "gold" as const,
+      glow: "rgba(255, 200, 87, 0.20)",
+      border: "rgba(255, 200, 87, 0.45)",
+      text: theme.colors.goldReward,
+      badge: "#1",
+      colHeight: 122,
+    };
+  }
+
+  if (rank === 2) {
+    return {
+      tone: "neutral" as const,
+      glow: "rgba(185, 195, 208, 0.16)",
+      border: "rgba(185, 195, 208, 0.38)",
+      text: "#D5DEE8",
+      badge: "#2",
+      colHeight: 96,
+    };
+  }
+
+  return {
+    tone: "neutral" as const,
+    glow: "rgba(201, 122, 69, 0.16)",
+    border: "rgba(201, 122, 69, 0.42)",
+    text: "#C97A45",
+    badge: "#3",
+    colHeight: 84,
+  };
 }
 
 export default function LeaderboardScreen() {
-  const [activeTab, setActiveTab] = useState<Tab>("sehir");
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const narrow = isNarrowWidth(width);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>("sehir");
+  const podiumReveal = useRef(PODIUM.map(() => new Animated.Value(0))).current;
+  const stickyReveal = useFadeIn({ duration: 360, delay: 220, fromY: 30, fromScale: 0.99 });
+
+  useEffect(() => {
+    Animated.stagger(
+      120,
+      podiumReveal.map((anim) =>
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 340,
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  }, [podiumReveal]);
+
+  const bottomTabs = useMemo(
+    () => [
+      { key: "map" as const, label: "Harita", icon: <MapIcon size={16} color={theme.colors.textMuted} /> },
+      { key: "missions" as const, label: "GÃ¶rev", icon: <Target size={16} color={theme.colors.textMuted} /> },
+      { key: "feed" as const, label: "Feed", icon: <ShoppingBag size={16} color={theme.colors.textMuted} /> },
+      { key: "notifications" as const, label: "Bildirim", icon: <Bell size={16} color={theme.colors.textMuted} /> },
+      { key: "profile" as const, label: "Ben", icon: <User size={16} color={theme.colors.primaryCyan} /> },
+    ],
+    []
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <View style={styles.seasonRow}>
-            <Text style={styles.seasonLabel}>SEZON 4</Text>
-            <View style={styles.seasonTimer}>
-              <View style={styles.timerDot} />
-              <Text style={styles.timerText}>12 GÜN</Text>
-            </View>
-          </View>
+      <AmbientGlow cyanOpacity={0.04} purpleOpacity={0.03} />
+      <View style={styles.glowTop} />
+      <View style={styles.glowBottom} />
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: getTabContentBottomSpace(insets.bottom, 136) }]}
+        showsVerticalScrollIndicator={false}
+        decelerationRate="fast"
+      >
+        <View style={styles.headerWrap}>
           <Text style={styles.title}>Liderlik</Text>
-        </View>
-        <View style={styles.trophyBadge}>
-          <Text style={styles.trophyEmoji}>🏆</Text>
-        </View>
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Podium */}
-        <View style={styles.podiumWrapper}>
-          {/* Left (rank 2) */}
-          <View style={[styles.podiumItem, styles.podiumSide]}>
-            <HexAvatar initials={PODIUM[0].initials} color={PODIUM[0].color} size={56} />
-            <Text style={styles.podiumName}>{PODIUM[0].name}</Text>
-            <Text style={[styles.podiumTitle, { color: PODIUM[0].color }]}>{PODIUM[0].title}</Text>
-            <Text style={styles.podiumArea}>{PODIUM[0].area}</Text>
-            <View style={[styles.podiumBar, { height: 60, backgroundColor: PODIUM[0].color }]}>
-              <Text style={styles.podiumRankNum}>2</Text>
-            </View>
-          </View>
-
-          {/* Center (rank 1) */}
-          <View style={[styles.podiumItem, styles.podiumCenter]}>
-            <View style={styles.crownAbove}>
-              <Text style={styles.crownEmoji}>👑</Text>
-            </View>
-            <HexAvatar initials={PODIUM[1].initials} color={PODIUM[1].color} size={72} />
-            <Text style={[styles.podiumName, { fontSize: 15 }]}>{PODIUM[1].name}</Text>
-            <Text style={[styles.podiumTitle, { color: PODIUM[1].color }]}>{PODIUM[1].title}</Text>
-            <Text style={[styles.podiumArea, { color: PODIUM[1].color }]}>{PODIUM[1].area}</Text>
-            <View style={[styles.podiumBar, { height: 80, backgroundColor: PODIUM[1].color }]}>
-              <Text style={styles.podiumRankNum}>1</Text>
-            </View>
-          </View>
-
-          {/* Right (rank 3) */}
-          <View style={[styles.podiumItem, styles.podiumSide]}>
-            <HexAvatar initials={PODIUM[2].initials} color={PODIUM[2].color} size={56} />
-            <Text style={styles.podiumName}>{PODIUM[2].name}</Text>
-            <Text style={[styles.podiumTitle, { color: PODIUM[2].color }]}>{PODIUM[2].title}</Text>
-            <Text style={styles.podiumArea}>{PODIUM[2].area}</Text>
-            <View style={[styles.podiumBar, { height: 50, backgroundColor: PODIUM[2].color }]}>
-              <Text style={styles.podiumRankNum}>3</Text>
-            </View>
-          </View>
+          <Text style={styles.subtitle}>Åehrindeki en gÃ¼Ã§lÃ¼ alan sahipleri</Text>
         </View>
 
-        {/* Season reward */}
-        <View style={styles.rewardCard}>
-          <Text style={styles.rewardIcon}>🏆</Text>
-          <View style={styles.rewardInfo}>
-            <Text style={styles.rewardTitle}>SEZON ÖDÜLÜ</Text>
-            <Text style={styles.rewardDesc}>Top 100 → Altın "Hükümdar" rozeti + 5.000 altın</Text>
-          </View>
-          <View style={styles.rewardRank}>
-            <Text style={styles.rewardRankLabel}>SIRAN</Text>
-            <Text style={styles.rewardRankValue}>#5</Text>
-          </View>
-        </View>
-
-        {/* List */}
-        <View style={styles.listContainer}>
-          {LIST.map((player) => {
-            const trendColor = player.trend.startsWith("+")
-              ? Colors.emerald
-              : player.trend === "0" ? Colors.textSecondary : Colors.coral;
+        <View style={[styles.filterRow, narrow && styles.filterRowWrap]}>
+          {FILTERS.map((filter) => {
+            const active = filter.key === activeFilter;
             return (
-              <View key={player.rank} style={[styles.listItem, player.isUser && styles.listItemUser]}>
-                <Text style={styles.listRank}>#{player.rank}</Text>
-                <HexAvatar
-                  initials={player.initials}
-                  color={player.isUser ? Colors.cyan : Colors.textSecondary}
-                  size={40}
-                />
-                <View style={styles.listInfo}>
-                  <Text style={[styles.listName, player.isUser && styles.listNameUser]}>
-                    {player.name}
-                    {player.isUser && <Text style={styles.youTag}> SEN</Text>}
-                  </Text>
-                  <Text style={styles.listArea}>{player.area}</Text>
-                </View>
-                <Text style={[styles.listTrend, { color: trendColor }]}>
-                  {player.trend !== "0" ? (player.trend.startsWith("+") ? "↑" : "↓") + player.trend.slice(1) : "—"}
-                </Text>
-              </View>
+              <Pressable
+                key={filter.key}
+                onPress={() => setActiveFilter(filter.key)}
+                style={({ pressed }) => [styles.filterPill, narrow && styles.filterPillNarrow, active && styles.filterPillActive, pressed && styles.pressed]}
+              >
+                <Text style={[styles.filterText, active && styles.filterTextActive]}>{filter.label}</Text>
+              </Pressable>
             );
           })}
         </View>
 
-        <View style={{ height: 32 }} />
+        <GlassCard style={styles.podiumCard} contentStyle={styles.podiumContent}>
+          <Text style={styles.sectionLabel}>TOP 3 PODIUM</Text>
+          <View style={styles.podiumRow}>
+            {PODIUM.map((player, index) => {
+              const palette = podiumPalette(player.rank);
+              return (
+                <Animated.View
+                  key={player.rank}
+                  style={[
+                    styles.podiumItem,
+                    player.rank === 1 && styles.podiumCenter,
+                    {
+                      opacity: podiumReveal[index],
+                      transform: [
+                        {
+                          translateY: podiumReveal[index].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [18, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  {player.rank === 1 ? (
+                    <GlowPulseView style={[styles.podiumGlow, { backgroundColor: palette.glow }]} duration={600} minOpacity={0.7} maxOpacity={1} minScale={1} maxScale={1.05} />
+                  ) : (
+                    <View style={[styles.podiumGlow, { backgroundColor: palette.glow }]} />
+                  )}
+                  <IconBadge
+                    tone={palette.tone}
+                    size={player.rank === 1 ? 56 : 48}
+                    icon={player.name.slice(0, 2).toUpperCase()}
+                    style={[styles.avatar, { borderColor: palette.border }]}
+                  />
+                  <Text style={styles.playerName}>{player.name}</Text>
+                  <Text style={[styles.playerRank, { color: palette.text }]}>{palette.badge}</Text>
+                  <Text style={styles.playerMeta}>Lv {player.level}</Text>
+                  <Text style={styles.playerMeta}>{player.area}</Text>
+                  <Text style={styles.playerMeta}>{player.weeklyXp}</Text>
+                  <View style={[styles.podiumColumn, { height: palette.colHeight, borderColor: palette.border, backgroundColor: palette.glow }]}>
+                    <AnimatedGradient color="rgba(255,255,255,0.22)" duration={980} />
+                  </View>
+                </Animated.View>
+              );
+            })}
+          </View>
+        </GlassCard>
+
+        <View style={styles.listWrap}>
+          {RANKING.length === 0 ? (
+            <EmptyState
+              title="Liderlik Verisi HazÄ±rlanÄ±yor"
+              message="SÄ±ralama listesi birkaÃ§ saniye iÃ§inde yenilenecek."
+            />
+          ) : null}
+          {RANKING.map((player) => (
+            <Pressable
+              key={player.rank}
+              onPress={() => {
+                // TODO: Open player detail panel.
+              }}
+            >
+            <GlassCard style={styles.rowCard} contentStyle={styles.rowContent}>
+              <View style={styles.leftRow}>
+                <Text style={styles.rankText}>#{player.rank}</Text>
+                <IconBadge tone="neutral" size={40} icon={player.initials} />
+                <View>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.username}>{player.username}</Text>
+                    {player.premium ? (
+                      <Pressable style={styles.premiumBadge} onPress={() => router.push(ROUTES.premium)}>
+                        <Crown size={10} color={theme.colors.goldReward} />
+                        <Text style={styles.premiumText}>PREMIUM</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <Text style={styles.detailText}>Level {player.level}</Text>
+                </View>
+              </View>
+
+              <View style={styles.rightMeta}>
+                <Text style={styles.areaValue}>{player.totalArea}</Text>
+                <View style={styles.xpRow}>
+                  <Zap size={12} color={theme.colors.primaryCyan} />
+                  <Text style={styles.xpValue}>{player.weeklyXp}</Text>
+                </View>
+              </View>
+            </GlassCard>
+            </Pressable>
+          ))}
+        </View>
+
       </ScrollView>
+
+      <Animated.View style={[styles.stickyWrap, { bottom: getTabContentBottomSpace(insets.bottom, 4) }, stickyReveal.style]}>
+        <NeonOutline borderRadius={theme.radius.lg} color="rgba(0, 229, 204, 0.46)">
+          <GlassCard style={styles.selfCard} contentStyle={styles.selfContent}>
+          <View style={styles.selfTopRow}>
+            <View style={styles.selfLabelRow}>
+              <Shield size={14} color={theme.colors.primaryCyan} />
+              <Text style={styles.selfTitle}>Sen #18</Text>
+            </View>
+            <View style={styles.selfPremiumBadge}>
+              <Text style={styles.selfPremiumBadgeText}>PREMIUM</Text>
+            </View>
+          </View>
+
+          <View style={styles.selfStatsRow}>
+            <Text style={styles.selfStatValue}>12.450 mÂ²</Text>
+            <Text style={styles.selfStatValue}>3.200 XP</Text>
+          </View>
+
+          <Text style={styles.motivation}>Ä°lk 10'a girmek iÃ§in 2.100 mÂ² daha fethet.</Text>
+          </GlassCard>
+        </NeonOutline>
+      </Animated.View>
+
+      <BottomTabBar<BottomKey>
+        tabs={bottomTabs}
+        activeKey="profile"
+        onTabPress={(key) => {
+          if (key === "map") router.push(ROUTES.tabs.map);
+          if (key === "missions") router.push(ROUTES.tabs.missions);
+          if (key === "feed") router.push(ROUTES.tabs.feed);
+          if (key === "notifications") router.push(ROUTES.tabs.notifications);
+          if (key === "profile") router.push(ROUTES.tabs.profile);
+        }}
+        style={styles.bottomTabs}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.backgroundDeep,
   },
-  seasonRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  seasonLabel: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1 },
-  seasonTimer: {
+  glowTop: {
+    position: "absolute",
+    top: -120,
+    right: -90,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: "rgba(255, 200, 87, 0.08)",
+  },
+  glowBottom: {
+    position: "absolute",
+    bottom: 110,
+    left: -110,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(0, 229, 204, 0.07)",
+  },
+  content: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  headerWrap: {
+    gap: 4,
+  },
+  title: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 28,
+  },
+  subtitle: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.sm,
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  filterRowWrap: {
+    flexWrap: "wrap",
+  },
+  filterPill: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    backgroundColor: theme.colors.surfaceLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterPillNarrow: {
+    minWidth: "48%",
+  },
+  filterPillActive: {
+    borderColor: "rgba(0, 229, 204, 0.54)",
+    backgroundColor: "rgba(0, 229, 204, 0.11)",
+  },
+  filterText: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
+  },
+  filterTextActive: {
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.semibold,
+  },
+  podiumCard: {
+    marginTop: 4,
+  },
+  podiumContent: {
+    gap: theme.spacing.sm,
+  },
+  sectionLabel: {
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  podiumRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  podiumItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  podiumCenter: {
+    marginTop: -8,
+  },
+  podiumGlow: {
+    position: "absolute",
+    top: -12,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    opacity: 0.55,
+  },
+  avatar: {
+    marginBottom: 6,
+  },
+  playerName: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  playerRank: {
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  playerMeta: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 10,
+    marginTop: 1,
+  },
+  podiumColumn: {
+    overflow: "hidden",
+    marginTop: 8,
+    width: "82%",
+    borderTopLeftRadius: theme.radius.md,
+    borderTopRightRadius: theme.radius.md,
+    borderWidth: 1,
+  },
+  listWrap: {
+    gap: 8,
+  },
+  rowCard: {
+    borderRadius: theme.radius.md,
+  },
+  rowContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  leftRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  rankText: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.bold,
+    width: 34,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  username: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 13,
+  },
+  detailText: {
+    marginTop: 2,
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 11,
+  },
+  premiumBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: `${Colors.coral}18`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: "rgba(255, 200, 87, 0.32)",
+    backgroundColor: "rgba(255, 200, 87, 0.09)",
+  },
+  premiumText: {
+    color: theme.colors.goldReward,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 9,
+  },
+  rightMeta: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  areaValue: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  xpRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  xpValue: {
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 11,
+  },
+  stickyWrap: {
+    position: "absolute",
+    left: theme.spacing.md,
+    right: theme.spacing.md,
+  },
+  selfCard: {
+    borderColor: "rgba(0, 229, 204, 0.40)",
+  },
+  selfContent: {
+    paddingVertical: 12,
+    gap: 8,
+  },
+  selfTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  selfLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  selfTitle: {
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 14,
+  },
+  selfPremiumBadge: {
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    backgroundColor: theme.colors.surfaceLight,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: `${Colors.coral}40`,
   },
-  timerDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.coral },
-  timerText: { fontSize: 10, fontWeight: "700", color: Colors.coral },
-  title: { fontSize: 28, fontWeight: "800", color: Colors.textPrimary },
-  trophyBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: `${Colors.gold}18`,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: `${Colors.gold}40`,
+  selfPremiumBadgeText: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 10,
   },
-  trophyEmoji: { fontSize: 24 },
-  tabs: {
+  selfStatsRow: {
     flexDirection: "row",
-    paddingHorizontal: 20,
-    gap: 8,
-    marginBottom: 20,
+    justifyContent: "space-between",
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceSolid,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+  selfStatValue: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 14,
   },
-  tabActive: { backgroundColor: Colors.cyan, borderColor: Colors.cyan },
-  tabText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary },
-  tabTextActive: { color: Colors.background, fontWeight: "700" },
-
-  // Podium
-  podiumWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    marginBottom: 20,
+  motivation: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
   },
-  podiumItem: { alignItems: "center", flex: 1 },
-  podiumSide: { marginBottom: 0 },
-  podiumCenter: { marginHorizontal: 8 },
-  crownAbove: { marginBottom: 4 },
-  crownEmoji: { fontSize: 28 },
-  hexAvatar: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    marginBottom: 8,
+  bottomTabs: {
+    borderTopColor: theme.colors.borderSubtle,
   },
-  hexAvatarText: { fontWeight: "800" },
-  podiumName: { fontSize: 12, fontWeight: "700", color: Colors.textPrimary, marginBottom: 2 },
-  podiumTitle: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5, marginBottom: 2 },
-  podiumArea: { fontSize: 11, color: Colors.textSecondary, marginBottom: 8 },
-  podiumBar: {
-    width: "100%",
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingTop: 8,
+  pressed: {
+    opacity: 0.88,
   },
-  podiumRankNum: { fontSize: 14, fontWeight: "800", color: Colors.background },
-
-  // Season reward
-  rewardCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: `${Colors.gold}10`,
-    borderRadius: 16,
-    padding: 14,
-    marginHorizontal: 20,
-    borderWidth: 1,
-    borderColor: `${Colors.gold}30`,
-    marginBottom: 20,
-    gap: 10,
-  },
-  rewardIcon: { fontSize: 24 },
-  rewardInfo: { flex: 1 },
-  rewardTitle: { fontSize: 10, fontWeight: "700", color: Colors.gold, letterSpacing: 1, marginBottom: 2 },
-  rewardDesc: { fontSize: 12, color: Colors.textSecondary },
-  rewardRank: { alignItems: "center" },
-  rewardRankLabel: { fontSize: 9, color: Colors.textMuted, letterSpacing: 1 },
-  rewardRankValue: { fontSize: 18, fontWeight: "800", color: Colors.gold },
-
-  // List
-  listContainer: { paddingHorizontal: 20 },
-  listItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    gap: 10,
-  },
-  listItemUser: { borderColor: `${Colors.cyan}50`, backgroundColor: `${Colors.cyan}08` },
-  listRank: { fontSize: 14, fontWeight: "800", color: Colors.textSecondary, width: 28 },
-  listInfo: { flex: 1 },
-  listName: { fontSize: 14, fontWeight: "600", color: Colors.textPrimary },
-  listNameUser: { color: Colors.cyan, fontWeight: "700" },
-  youTag: { fontSize: 10, color: Colors.cyan, fontWeight: "800" },
-  listArea: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  listTrend: { fontSize: 13, fontWeight: "700" },
 });
+

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated } from "
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
+import { ROUTES } from "@/constants/routes";
 
 const { width } = Dimensions.get("window");
 
@@ -65,7 +66,7 @@ const SLIDES = [
   },
 ];
 
-// Mock map territory visual
+// Territory map preview visual
 function TerritoryVisual({ accentColor }: { accentColor: string }) {
   return (
     <View style={styles.mapVisual}>
@@ -96,12 +97,12 @@ export default function OnboardingStep1() {
       ]).start();
       setCurrentSlide((s) => s + 1);
     } else {
-      router.push("/(onboarding)/step2");
+      router.push(ROUTES.onboarding.step2);
     }
   };
 
   const handleSkip = () => {
-    router.push("/(onboarding)/step2");
+    router.push(ROUTES.onboarding.step2);
   };
 
   return (

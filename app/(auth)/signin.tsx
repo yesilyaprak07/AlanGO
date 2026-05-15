@@ -1,98 +1,132 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from "react-native";
+﻿import { useState } from "react";
+import {
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react-native";
-import { Colors } from "@/constants/colors";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Lock, Mail, Sparkles } from "lucide-react-native";
+import { theme } from "@/constants/theme";
+import { AlanGoLogo, CyberTextInput, GlassCard, HelperText, NeonButton } from "@/components/ui";
+import { useFadeIn } from "@/hooks/useFadeIn";
+import { getScreenBottomPadding } from "@/constants/safeArea";
+import { ROUTES } from "@/constants/routes";
 
 export default function SignInScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  const handleSignIn = () => {
-    router.replace("/(tabs)/map");
-  };
+  const headerAnim = useFadeIn({ duration: 300, delay: 20, fromY: 14 });
+  const formAnim = useFadeIn({ duration: 360, delay: 120, fromY: 20, fromScale: 0.98 });
+  const legalAnim = useFadeIn({ duration: 280, delay: 220, fromY: 10 });
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>A</Text>
-          </View>
-          <Text style={styles.title}>Hoş Geldin</Text>
-          <Text style={styles.subtitle}>Giriş yaparak oynamaya başla</Text>
-        </View>
+      <View style={styles.glowOne} />
+      <View style={styles.glowTwo} />
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Mail size={20} color={Colors.textSecondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="E-posta"
-              placeholderTextColor={Colors.textSecondary}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: getScreenBottomPadding(insets.bottom, theme.spacing.xl) }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          decelerationRate="fast"
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View style={[styles.header, headerAnim.style]}>
+            <AlanGoLogo size="lg" showTagline glow="soft" style={styles.logoBadge} />
+            <Text style={styles.title}>Tek hesabÄ±nla oyuna katÄ±l!</Text>
+          </Animated.View>
+
+          <Animated.View style={formAnim.style}>
+            <GlassCard style={styles.formCard} contentStyle={styles.formCardContent}>
+            <CyberTextInput
+              label="E-posta"
+              leftIcon={<Mail size={18} color={theme.colors.textSecondary} />}
+              placeholder="mail@ornek.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
             />
-          </View>
 
-          <View style={styles.inputContainer}>
-            <Lock size={20} color={Colors.textSecondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Şifre"
-              placeholderTextColor={Colors.textSecondary}
+            <CyberTextInput
+              label="Åifre"
+              leftIcon={<Lock size={18} color={theme.colors.textSecondary} />}
+              placeholder="Åifrenizi girin"
               value={password}
               onChangeText={setPassword}
-              secureTextEntry={!showPassword}
+              secureToggle
             />
+
             <TouchableOpacity
-              style={styles.eyeIcon}
-              onPress={() => setShowPassword(!showPassword)}
+              style={styles.forgotLinkWrap}
+              onPress={() => {
+                // TODO: Connect forgot-password flow.
+              }}
             >
-              {showPassword ? (
-                <EyeOff size={20} color={Colors.textSecondary} />
-              ) : (
-                <Eye size={20} color={Colors.textSecondary} />
-              )}
+              <Text style={styles.forgotText}>Åifremi unuttum?</Text>
             </TouchableOpacity>
-          </View>
 
-          <TouchableOpacity style={styles.forgotButton}>
-            <Text style={styles.forgotText}>Şifremi Unuttum</Text>
-          </TouchableOpacity>
+            <NeonButton
+              label="GiriÅŸ Yap"
+              fullWidth
+              onPress={() => {
+                // TODO: Connect sign-in submit action.
+              }}
+            />
 
-          <TouchableOpacity style={styles.signInButton} onPress={handleSignIn}>
-            <Text style={styles.signInButtonText}>Giriş Yap</Text>
-          </TouchableOpacity>
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>veya</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>veya</Text>
-            <View style={styles.dividerLine} />
-          </View>
+            <NeonButton
+              label="Google ile Devam Et"
+              fullWidth
+              variant="ghost"
+              icon={<Text style={styles.brandIcon}>G</Text>}
+              onPress={() => {
+                // TODO: Connect Google sign-in.
+              }}
+            />
+            <NeonButton
+              label="Apple ile Devam Et"
+              fullWidth
+              variant="ghost"
+              icon={<Sparkles size={16} color={theme.colors.textPrimary} />}
+              onPress={() => {
+                // TODO: Connect Apple sign-in.
+              }}
+            />
+            <NeonButton
+              label="Ãœye Ol"
+              fullWidth
+              variant="ghost"
+              onPress={() => router.push(ROUTES.auth.signup)}
+            />
+            </GlassCard>
+          </Animated.View>
 
-          <View style={styles.socialButtons}>
-            <TouchableOpacity style={styles.socialButton}>
-              <Text style={styles.socialButtonText}>G</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
-              <Text style={styles.socialButtonText}>🍎</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Hesabın yok mu?</Text>
-        <TouchableOpacity onPress={() => router.push("/(auth)/signup")}>
-          <Text style={styles.footerLink}>Kayıt Ol</Text>
-        </TouchableOpacity>
-      </View>
+          <Animated.View style={legalAnim.style}>
+            <HelperText
+              text="Devam ederek KullanÄ±m KoÅŸullarÄ± ve Gizlilik PolitikasÄ±'nÄ± kabul etmiÅŸ olursunuz."
+              style={styles.legalText}
+            />
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -100,133 +134,86 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.colors.backgroundDeep,
+  },
+  flex: {
+    flex: 1,
+  },
+  glowOne: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(0, 229, 204, 0.15)",
+    top: -70,
+    right: -60,
+  },
+  glowTwo: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(139, 92, 246, 0.14)",
+    bottom: -60,
+    left: -50,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
   },
   header: {
-    alignItems: "center",
-    paddingTop: 40,
-    paddingBottom: 40,
+    marginBottom: theme.spacing.lg,
   },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  logoText: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: Colors.background,
+  logoBadge: {
+    alignSelf: "flex-start",
+    marginBottom: theme.spacing.md,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: Colors.textPrimary,
-    marginBottom: 8,
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 30,
+    lineHeight: 36,
   },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.textSecondary,
+  formCard: {
+    borderRadius: theme.radius.xl,
   },
-  form: {
-    paddingHorizontal: 24,
-    gap: 16,
+  formCardContent: {
+    gap: theme.spacing.sm,
   },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 56,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    paddingHorizontal: 16,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.textPrimary,
-  },
-  eyeIcon: {
-    padding: 8,
-  },
-  forgotButton: {
+  forgotLinkWrap: {
     alignSelf: "flex-end",
+    marginBottom: theme.spacing.xs,
   },
   forgotText: {
-    fontSize: 14,
-    color: Colors.primary,
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.sm,
   },
-  signInButton: {
-    backgroundColor: Colors.primary,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  signInButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: Colors.background,
-  },
-  divider: {
+  dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 24,
-    marginBottom: 8,
+    marginVertical: theme.spacing.xs,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.surfaceBorder,
+    backgroundColor: theme.colors.borderSubtle,
   },
   dividerText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginHorizontal: 16,
+    marginHorizontal: theme.spacing.sm,
+    color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.size.sm,
   },
-  socialButtons: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
+  brandIcon: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.size.base,
   },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-  },
-  socialButtonText: {
-    fontSize: 20,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 24,
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  footerLink: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.primary,
+  legalText: {
+    marginTop: theme.spacing.md,
+    textAlign: "center",
   },
 });
+

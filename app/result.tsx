@@ -15,6 +15,8 @@ import { useEffect, useRef } from "react";
 import MapView, { Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import { useGameStore } from "@/stores/gameStore";
 import { darkMapStyle } from "@/constants/mapStyles";
+import { useAuth } from "@/lib/auth";
+import { ROUTES } from "@/constants/routes";
 
 const { width } = Dimensions.get("window");
 
@@ -31,7 +33,8 @@ function formatDistance(meters: number): string {
 
 export default function ResultScreen() {
   const router = useRouter();
-  const { lastRun, territories } = useGameStore();
+  const { lastRun, territories, saveGameSession } = useGameStore();
+  const { profile, refreshProfile } = useAuth();
   const mapRef = useRef<MapView>(null);
   const scaleAnim = useRef(new Animated.Value(0.6)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -45,10 +48,24 @@ export default function ResultScreen() {
   const xp = Math.round(area / 10) + Math.round(distance / 5);
   const gold = Math.round(area / 20) + 50;
   const areaKm2 = (area / 1_000_000).toFixed(2);
-  const level = 24;
-  const xpCurrent = 2300;
-  const xpNext = 3500;
-  const xpProgress = (xpCurrent / xpNext) * 100;
+  const level = profile?.level ?? 1;
+  const xpCurrent = profile?.xp ?? 0;
+  const xpNext = level * 1000;
+  const xpProgress = xpNext > 0 ? Math.min((xpCurrent / xpNext) * 100, 100) : 0;
+
+  // Save game session to Supabase on mount
+  useEffect(() => {
+    if (lastRun && area > 0) {
+      saveGameSession({
+        polygon,
+        area,
+        distance,
+        duration,
+        xpEarned: xp,
+        goldEarned: gold,
+      }).then(() => refreshProfile());
+    }
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -57,12 +74,18 @@ export default function ResultScreen() {
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
 
-    Animated.loop(
+    const glowLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, { toValue: 0.8, duration: 1800, useNativeDriver: true }),
         Animated.timing(glowAnim, { toValue: 0.3, duration: 1800, useNativeDriver: true }),
       ])
-    ).start();
+    );
+
+    glowLoop.start();
+
+    return () => {
+      glowLoop.stop();
+    };
   }, [scaleAnim, fadeAnim, slideAnim, glowAnim]);
 
   useEffect(() => {
@@ -84,8 +107,8 @@ export default function ResultScreen() {
     } catch {}
   };
 
-  const handleContinue = () => router.replace("/(tabs)/map");
-  const handleSave = () => router.replace("/(tabs)/map");
+  const handleContinue = () => router.replace(ROUTES.tabs.map);
+  const handleSave = () => router.replace(ROUTES.tabs.map);
 
   return (
     <SafeAreaView style={styles.container}>

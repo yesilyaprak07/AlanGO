@@ -1,345 +1,278 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
+﻿import React, { useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Bell, Gift, Map as MapIcon, ShoppingBag, Target, Trophy, User } from "lucide-react-native";
+import {
+  BottomTabBar,
+  GlassCard,
+  HelperText,
+  MissionCard,
+  NeonButton,
+  ProgressBar,
+  SoonBadge,
+  StatCard,
+} from "@/components/ui";
+import { AmbientGlow } from "@/components/fx";
+import { theme } from "@/constants/theme";
+import { ROUTES } from "@/constants/routes";
+import { getTabContentBottomSpace, isNarrowWidth } from "@/constants/safeArea";
 
-const STREAK_DAYS = [
-  { label: "P", done: true },
-  { label: "S", done: true },
-  { label: "Ç", done: true },
-  { label: "P", done: true },
-  { label: "C", done: true },
-  { label: "C", done: false, isGift: true },
-  { label: "P", done: false, isTrophy: true },
+type BottomKey = "map" | "missions" | "feed" | "notifications" | "profile";
+
+type MissionItem = {
+  id: string;
+  title: string;
+  total: number;
+  progress: number;
+  xp: number;
+  coin: number;
+  box: number;
+  tone?: "cyan" | "gold";
+};
+
+const DAILY_BASE: MissionItem[] = [
+  { id: "d1", title: "3 alan fethet", total: 3, progress: 1, xp: 180, coin: 90, box: 1, tone: "cyan" },
+  { id: "d2", title: "2 km yuru", total: 2, progress: 1, xp: 130, coin: 60, box: 0, tone: "cyan" },
+  { id: "d3", title: "1 rakip alani ele gecir", total: 1, progress: 0, xp: 220, coin: 120, box: 1, tone: "gold" },
 ];
 
-const DAILY_MISSIONS = [
-  {
-    id: 1,
-    icon: "📍",
-    title: "2 km² alan ele geçir",
-    progress: 1.36,
-    total: 2,
-    unit: "km²",
-    xp: 120,
-    color: Colors.cyan,
-  },
-  {
-    id: 2,
-    icon: "🏆",
-    title: "3 rakip bölge fethet",
-    progress: 1,
-    total: 3,
-    unit: "",
-    xp: 200,
-    color: Colors.coral,
-  },
-  {
-    id: 3,
-    icon: "👑",
-    title: "5 km yürü",
-    progress: 5.2,
-    total: 5,
-    unit: "km",
-    xp: 80,
-    color: Colors.emerald,
-    completed: true,
-  },
+const WEEKLY_BASE: MissionItem[] = [
+  { id: "w1", title: "15 km tamamla", total: 15, progress: 7, xp: 450, coin: 260, box: 1, tone: "cyan" },
+  { id: "w2", title: "10 bolge fethet", total: 10, progress: 4, xp: 520, coin: 330, box: 2, tone: "gold" },
+  { id: "w3", title: "3 gun ust uste giris yap", total: 3, progress: 2, xp: 280, coin: 150, box: 1, tone: "cyan" },
 ];
-
-function StreakDot({ label, done, isGift, isTrophy }: { label: string; done: boolean; isGift?: boolean; isTrophy?: boolean }) {
-  return (
-    <View style={styles.streakItem}>
-      <View style={[
-        styles.streakDot,
-        done && styles.streakDotDone,
-        isGift && styles.streakDotGift,
-        isTrophy && styles.streakDotTrophy,
-      ]}>
-        {isTrophy && <Text style={styles.streakEmoji}>🏆</Text>}
-        {isGift && <Text style={styles.streakEmoji}>🎁</Text>}
-        {done && !isGift && !isTrophy && <Text style={styles.streakCheck}>✓</Text>}
-        {!done && !isGift && !isTrophy && <Text style={styles.streakLetter}>{label}</Text>}
-      </View>
-      {!isGift && !isTrophy && <Text style={styles.streakLabel}>{label}</Text>}
-    </View>
-  );
-}
-
-function MissionCard({ mission }: { mission: typeof DAILY_MISSIONS[0] }) {
-  const pct = Math.min(100, (mission.progress / mission.total) * 100);
-  const isCompleted = mission.completed || mission.progress >= mission.total;
-  const progressText = mission.unit
-    ? `${mission.progress} ${mission.unit} / ${mission.total} ${mission.unit}`
-    : `${mission.progress} / ${mission.total}`;
-
-  return (
-    <View style={[styles.missionCard, isCompleted && styles.missionCardDone]}>
-      <View style={[styles.missionIcon, { backgroundColor: `${mission.color}18` }]}>
-        <Text style={styles.missionEmoji}>{mission.icon}</Text>
-      </View>
-      <View style={styles.missionContent}>
-        <View style={styles.missionTop}>
-          <Text style={styles.missionTitle} numberOfLines={1}>{mission.title}</Text>
-          <View style={[styles.xpBadge, { backgroundColor: `${mission.color}20`, borderColor: `${mission.color}40` }]}>
-            <Text style={[styles.xpText, { color: mission.color }]}>🔗 +{mission.xp}</Text>
-          </View>
-        </View>
-        <Text style={styles.missionProgress}>{progressText}</Text>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressBar, { width: `${pct}%`, backgroundColor: mission.color }]} />
-        </View>
-      </View>
-    </View>
-  );
-}
 
 export default function MissionsScreen() {
-  const streakCount = 7;
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const narrow = isNarrowWidth(width);
+  const [dailyMissions, setDailyMissions] = useState(DAILY_BASE);
+  const [weeklyMissions, setWeeklyMissions] = useState(WEEKLY_BASE);
+
+  const totalDailyProgress = useMemo(() => {
+    const total = dailyMissions.reduce((acc, item) => acc + item.total, 0);
+    const current = dailyMissions.reduce((acc, item) => acc + Math.min(item.progress, item.total), 0);
+    return total > 0 ? (current / total) * 100 : 0;
+  }, [dailyMissions]);
+
+  const dailyRewards = useMemo(() => {
+    return dailyMissions.reduce(
+      (acc, item) => {
+        acc.xp += item.xp;
+        acc.coin += item.coin;
+        acc.box += item.box;
+        return acc;
+      },
+      { xp: 0, coin: 0, box: 0 }
+    );
+  }, [dailyMissions]);
+
+  const progressMission = (targetId: string, group: "daily" | "weekly") => {
+    const updater = (items: MissionItem[]) =>
+      items.map((item) =>
+        item.id === targetId ? { ...item, progress: Math.min(item.total, item.progress + 1) } : item
+      );
+
+    if (group === "daily") {
+      setDailyMissions((prev) => updater(prev));
+    } else {
+      setWeeklyMissions((prev) => updater(prev));
+    }
+  };
+
+  const bottomTabs = [
+    { key: "map" as const, label: "Harita", icon: <MapIcon size={16} color={theme.colors.textMuted} /> },
+    { key: "missions" as const, label: "Gorev", icon: <Target size={16} color={theme.colors.primaryCyan} /> },
+    { key: "feed" as const, label: "Feed", icon: <ShoppingBag size={16} color={theme.colors.textMuted} /> },
+    { key: "notifications" as const, label: "Bildirim", icon: <Bell size={16} color={theme.colors.textMuted} /> },
+    { key: "profile" as const, label: "Profil", icon: <User size={16} color={theme.colors.textMuted} /> },
+  ];
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.dayLabel}>BUGÜN</Text>
-          <Text style={styles.title}>Görevler</Text>
-        </View>
-        <View style={styles.streakBadge}>
-          <Text style={styles.streakFire}>🔥</Text>
-          <Text style={styles.streakCount}>{streakCount} gün streak</Text>
-        </View>
-      </View>
+      <AmbientGlow cyanOpacity={0.04} purpleOpacity={0.03} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Weekly streak */}
-        <View style={styles.section}>
-          <View style={styles.streakHeader}>
-            <Text style={styles.sectionTitle}>Haftalık Streak</Text>
-            <Text style={styles.streakFraction}>{STREAK_DAYS.filter(d => d.done).length}/7</Text>
-          </View>
-          <View style={styles.streakRow}>
-            {STREAK_DAYS.map((day, i) => (
-              <StreakDot key={i} {...day} />
-            ))}
-          </View>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: getTabContentBottomSpace(insets.bottom, 30) }]}
+        showsVerticalScrollIndicator={false}
+        decelerationRate="fast"
+      >
+        <View style={styles.headerWrap}>
+          <Text style={styles.title}>Gorevler</Text>
+          <HelperText text="Bugunku hedeflerini tamamla, XP ve coin kazan." />
         </View>
 
-        {/* Daily missions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>GÜNLÜK GÖREVLER</Text>
-          {DAILY_MISSIONS.map((mission) => (
-            <MissionCard key={mission.id} mission={mission} />
+        <View style={[styles.statRow, narrow && styles.statRowWrap]}>
+          <StatCard title="Gunluk XP" value={dailyRewards.xp} subtitle="Toplam" icon="XP" style={[styles.statItem, narrow && styles.statItemNarrow]} />
+          <StatCard title="Coin" value={dailyRewards.coin} subtitle="Toplam" icon="C" style={[styles.statItem, narrow && styles.statItemNarrow]} />
+        </View>
+
+        <GlassCard contentStyle={styles.progressBlock}>
+          <View style={styles.progressHead}>
+            <Text style={styles.sectionTitle}>Gunluk Ilerleme</Text>
+            <SoonBadge label="MYSTERY +1" />
+          </View>
+          <ProgressBar value={totalDailyProgress} />
+          <View style={styles.rewardMetaRow}>
+            <Text style={styles.rewardMetaText}>XP: +{dailyRewards.xp}</Text>
+            <Text style={styles.rewardMetaText}>Coin: +{dailyRewards.coin}</Text>
+            <Text style={styles.rewardMetaText}>Mystery Box: +{dailyRewards.box}</Text>
+          </View>
+        </GlassCard>
+
+        <View style={styles.sectionWrap}>
+          <Text style={styles.sectionTitle}>Gunluk Gorevler</Text>
+          {dailyMissions.map((mission) => (
+            <MissionCard
+              key={mission.id}
+              title={mission.title}
+              current={mission.progress}
+              total={mission.total}
+              xp={mission.xp}
+              coin={mission.coin}
+              mysteryBox={mission.box}
+              tone={mission.tone}
+              onProgressPress={() => progressMission(mission.id, "daily")}
+            />
           ))}
         </View>
 
-        {/* Weekly reward */}
-        <View style={styles.weeklyReward}>
-          <View style={styles.weeklyLeft}>
-            <Text style={styles.weeklyIcon}>🎁</Text>
-            <View>
-              <Text style={styles.weeklyTitle}>Haftalık Ödül</Text>
-              <Text style={styles.weeklySubtitle}>Sezon Sandığı</Text>
-            </View>
-          </View>
-          <View style={styles.weeklyRight}>
-            <Text style={styles.weeklyTimer}>3 gün 14 saat kaldı</Text>
-            <View style={styles.weeklyTrack}>
-              <View style={[styles.weeklyBar, { width: "72%" }]} />
-            </View>
-          </View>
+        <View style={styles.sectionWrap}>
+          <Text style={styles.sectionTitle}>Haftalik Gorevler</Text>
+          {weeklyMissions.map((mission) => (
+            <MissionCard
+              key={mission.id}
+              title={mission.title}
+              current={mission.progress}
+              total={mission.total}
+              xp={mission.xp}
+              coin={mission.coin}
+              mysteryBox={mission.box}
+              tone={mission.tone}
+              onProgressPress={() => progressMission(mission.id, "weekly")}
+            />
+          ))}
         </View>
 
-        {/* Season missions header */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SEZON GÖREVLERİ</Text>
-          <View style={styles.seasonCard}>
-            <View style={styles.seasonIcon}>
-              <Text style={styles.seasonEmoji}>🗺️</Text>
-            </View>
-            <View style={styles.seasonContent}>
-              <Text style={styles.seasonTitle}>Sezon Şampiyonu</Text>
-              <Text style={styles.seasonDesc}>100 km² toplam alan ele geçir</Text>
-              <View style={styles.seasonProgressTrack}>
-                <View style={[styles.seasonProgressBar, { width: "42%" }]} />
-              </View>
-              <Text style={styles.seasonProgressText}>42 / 100 km²</Text>
-            </View>
-            <View style={styles.seasonXp}>
-              <Text style={styles.seasonXpText}>🔗 2,000</Text>
-            </View>
+        <GlassCard contentStyle={styles.ctaCardContent}>
+          <View style={styles.ctaTextWrap}>
+            <Trophy size={16} color={theme.colors.goldReward} />
+            <Text style={styles.ctaTitle}>Etkinlik ve Mystery Box firsatlarini kacirma</Text>
           </View>
-        </View>
+          <View style={styles.ctaBtnsRow}>
+            <NeonButton label="Etkinlikler" size="sm" variant="ghost" onPress={() => router.push(ROUTES.events)} style={styles.ctaBtn} />
+            <NeonButton
+              label="Mystery Box"
+              size="sm"
+              variant="gold"
+              onPress={() => router.push(ROUTES.mysteryBox)}
+              style={styles.ctaBtn}
+              icon={<Gift size={14} color={theme.colors.goldReward} />}
+            />
+          </View>
+        </GlassCard>
+
       </ScrollView>
+
+      <BottomTabBar<BottomKey>
+        tabs={bottomTabs}
+        activeKey="missions"
+        onTabPress={(key) => {
+          if (key === "map") router.push(ROUTES.tabs.map);
+          if (key === "missions") return;
+          if (key === "feed") router.push(ROUTES.tabs.feed);
+          if (key === "notifications") router.push(ROUTES.tabs.notifications);
+          if (key === "profile") router.push(ROUTES.tabs.profile);
+        }}
+        style={styles.bottomTabs}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.backgroundDeep,
+  },
+  content: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.md,
+  },
+  headerWrap: {
+    gap: 4,
+  },
+  title: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 28,
+  },
+  statRow: {
     flexDirection: "row",
+    gap: theme.spacing.sm,
+  },
+  statRowWrap: {
+    flexWrap: "wrap",
+  },
+  statItem: {
+    flex: 1,
+  },
+  statItemNarrow: {
+    minWidth: "100%",
+  },
+  progressBlock: {
+    gap: theme.spacing.xs,
+  },
+  progressHead: {
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
+    gap: theme.spacing.xs,
   },
-  dayLabel: { fontSize: 10, fontWeight: "700", color: Colors.textMuted, letterSpacing: 1.5, marginBottom: 2 },
-  title: { fontSize: 28, fontWeight: "800", color: Colors.textPrimary },
-  streakBadge: {
+  rewardMetaRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: `${Colors.coral}18`,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: `${Colors.coral}40`,
+    flexWrap: "wrap",
+    gap: 8,
   },
-  streakFire: { fontSize: 16 },
-  streakCount: { fontSize: 13, fontWeight: "700", color: Colors.coral },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
-  section: { marginBottom: 28 },
-  sectionTitle: {
+  rewardMetaText: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.typography.fontFamily.medium,
     fontSize: 11,
-    fontWeight: "700",
-    color: Colors.textSecondary,
-    letterSpacing: 1.5,
-    marginBottom: 14,
   },
-  streakHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
-  streakFraction: { fontSize: 12, fontWeight: "700", color: Colors.cyan },
-  streakRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+  sectionWrap: {
+    gap: theme.spacing.sm,
   },
-  streakItem: { alignItems: "center", gap: 4 },
-  streakDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: Colors.surfaceBorder,
-    justifyContent: "center",
-    alignItems: "center",
+  sectionTitle: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.base,
   },
-  streakDotDone: { backgroundColor: Colors.cyan },
-  streakDotGift: { backgroundColor: `${Colors.gold}30`, borderWidth: 1, borderColor: `${Colors.gold}60` },
-  streakDotTrophy: { backgroundColor: `${Colors.gold}20`, borderWidth: 1, borderColor: `${Colors.gold}50` },
-  streakEmoji: { fontSize: 16 },
-  streakCheck: { fontSize: 16, color: Colors.background, fontWeight: "700" },
-  streakLetter: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary },
-  streakLabel: { fontSize: 9, color: Colors.textMuted },
-
-  // Mission cards
-  missionCard: {
-    flexDirection: "row",
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    gap: 12,
+  ctaCardContent: {
+    gap: theme.spacing.sm,
   },
-  missionCardDone: { borderColor: `${Colors.emerald}40` },
-  missionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  missionEmoji: { fontSize: 22 },
-  missionContent: { flex: 1 },
-  missionTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
-  missionTitle: { flex: 1, fontSize: 14, fontWeight: "600", color: Colors.textPrimary, marginRight: 8 },
-  xpBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  xpText: { fontSize: 11, fontWeight: "700" },
-  missionProgress: { fontSize: 11, color: Colors.textSecondary, marginBottom: 6 },
-  progressTrack: {
-    height: 4,
-    backgroundColor: Colors.surfaceBorder,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressBar: { height: "100%", borderRadius: 2 },
-
-  // Weekly reward
-  weeklyReward: {
+  ctaTextWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: `${Colors.gold}30`,
-    marginBottom: 28,
-    gap: 14,
+    gap: 8,
   },
-  weeklyLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  weeklyIcon: { fontSize: 28 },
-  weeklyTitle: { fontSize: 14, fontWeight: "700", color: Colors.textPrimary },
-  weeklySubtitle: { fontSize: 12, color: Colors.gold },
-  weeklyRight: { flex: 1 },
-  weeklyTimer: { fontSize: 11, color: Colors.textSecondary, marginBottom: 6 },
-  weeklyTrack: {
-    height: 4,
-    backgroundColor: Colors.surfaceBorder,
-    borderRadius: 2,
-    overflow: "hidden",
+  ctaTitle: {
+    flex: 1,
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: theme.typography.size.sm,
   },
-  weeklyBar: { height: "100%", backgroundColor: Colors.gold, borderRadius: 2 },
-
-  // Season card
-  seasonCard: {
+  ctaBtnsRow: {
     flexDirection: "row",
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-    gap: 12,
-    alignItems: "center",
+    gap: theme.spacing.sm,
   },
-  seasonIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: `${Colors.purple}20`,
-    justifyContent: "center",
-    alignItems: "center",
+  ctaBtn: {
+    flex: 1,
   },
-  seasonEmoji: { fontSize: 22 },
-  seasonContent: { flex: 1 },
-  seasonTitle: { fontSize: 14, fontWeight: "700", color: Colors.textPrimary, marginBottom: 2 },
-  seasonDesc: { fontSize: 11, color: Colors.textSecondary, marginBottom: 6 },
-  seasonProgressTrack: {
-    height: 4,
-    backgroundColor: Colors.surfaceBorder,
-    borderRadius: 2,
-    overflow: "hidden",
-    marginBottom: 4,
+  bottomTabs: {
+    borderTopColor: theme.colors.borderSubtle,
   },
-  seasonProgressBar: { height: "100%", backgroundColor: Colors.purple, borderRadius: 2 },
-  seasonProgressText: { fontSize: 10, color: Colors.textSecondary },
-  seasonXp: {
-    backgroundColor: `${Colors.cyan}15`,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: `${Colors.cyan}30`,
-  },
-  seasonXpText: { fontSize: 12, fontWeight: "700", color: Colors.cyan },
 });
+

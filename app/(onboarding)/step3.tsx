@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ROUTES } from "@/constants/routes";
 
 export default function OnboardingStep3() {
   const router = useRouter();
@@ -18,21 +19,26 @@ export default function OnboardingStep3() {
       Animated.timing(opacityAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
     ]).start();
 
-    Animated.loop(
+    const glowLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
         Animated.timing(glowAnim, { toValue: 0.4, duration: 1400, useNativeDriver: true }),
       ])
-    ).start();
+    );
+
+    glowLoop.start();
 
     Animated.timing(progressAnim, { toValue: 1, duration: 2200, useNativeDriver: false }).start();
 
     const timer = setTimeout(async () => {
       await AsyncStorage.setItem("alango_onboarding_done", "true");
-      router.replace("/(auth)/signin");
+      router.replace(ROUTES.auth.signin);
     }, 2800);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      glowLoop.stop();
+    };
   }, [router, scaleAnim, opacityAnim, glowAnim, progressAnim]);
 
   return (

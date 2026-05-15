@@ -92,7 +92,7 @@ export default function DiscoverScreen() {
         ))}
         <View style={styles.eventCard}>
           <View style={styles.eventBadge}>
-            <Text style={styles.eventBadgeText}>YAKINDA</Text>
+            <Text style={styles.eventBadgeText}>GUNCEL ETKINLIK</Text>
           </View>
           <Text style={styles.eventTitle}>Antalya Tur Turnuvası</Text>
           <Text style={styles.eventSubtitle}>

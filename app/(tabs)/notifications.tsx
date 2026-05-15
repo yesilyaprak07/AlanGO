@@ -1,211 +1,273 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
+﻿import React, { useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Bell,
+  Crosshair,
+  Gift,
+  Map as MapIcon,
+  ShieldAlert,
+  ShoppingBag,
+  Sparkles,
+  Target,
+  Trophy,
+  User,
+  Waypoints,
+} from "lucide-react-native";
+import {
+  AlanGoLogo,
+  BottomTabBar,
+  EmptyRadarState,
+  GlassCard,
+  HelperText,
+  NotificationCard,
+  SegmentedSelector,
+} from "@/components/ui";
+import { AmbientGlow } from "@/components/fx";
+import { theme } from "@/constants/theme";
+import { ROUTES } from "@/constants/routes";
+import { getTabContentBottomSpace } from "@/constants/safeArea";
 
-const EVENTS = [
+type BottomKey = "map" | "missions" | "feed" | "notifications" | "profile";
+type NotificationFilter = "all" | "reward" | "pvp" | "event";
+
+type NotificationItem = {
+  id: string;
+  type: Exclude<NotificationFilter, "all"> | "mission" | "signal";
+  title: string;
+  body: string;
+  time: string;
+  unread: boolean;
+};
+
+const FILTERS = [
+  { key: "all" as const, label: "Tumu" },
+  { key: "reward" as const, label: "Oduller" },
+  { key: "pvp" as const, label: "PvP" },
+  { key: "event" as const, label: "Etkinlikler" },
+];
+
+const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
-    id: 1,
-    type: "attack",
-    icon: "⚔️",
-    title: "Alanına saldırı!",
-    body: "Kaan_42 Karşıyaka sınırını ihlal ediyor",
-    time: "2 dk",
-    color: Colors.coral,
-    urgent: true,
-  },
-  {
-    id: 2,
-    type: "level",
-    icon: "⬆️",
-    title: "Seviye atladın!",
-    body: "Tebrikler! Seviye 24'e ulaştın → GENERAL yakın",
-    time: "15 dk",
-    color: Colors.cyan,
-    urgent: false,
-  },
-  {
-    id: 3,
-    type: "mission",
-    icon: "🎯",
-    title: "Görev tamamlandı",
-    body: "Günlük 5 km yürüme hedefi +80 XP kazandırdı",
-    time: "1 sa",
-    color: Colors.emerald,
-    urgent: false,
-  },
-  {
-    id: 4,
-    type: "nearby",
-    icon: "📡",
-    title: "Rakip yakında",
-    body: "KaraKurt sadece 90m uzakta",
-    time: "2 sa",
-    color: Colors.warning,
-    urgent: false,
-  },
-  {
-    id: 5,
-    type: "attack",
-    icon: "💀",
-    title: "Çizgin kesildi!",
-    body: "Savaşçı seni avladı · -50 XP",
-    time: "Dün",
-    color: Colors.coral,
-    urgent: false,
-  },
-  {
-    id: 6,
+    id: "n1",
     type: "reward",
-    icon: "🎁",
-    title: "Sezon ödülü yaklaşıyor",
-    body: "12 gün içinde Top 100'e gir → Hükümdar rozeti kazan",
-    time: "Dün",
-    color: Colors.gold,
-    urgent: false,
+    title: "Gizli odul kesfedildi!",
+    body: "1000 TL odul kazandin.",
+    time: "2 dk once",
+    unread: true,
   },
   {
-    id: 7,
-    type: "achievement",
-    icon: "🏅",
-    title: "Yeni başarım!",
-    body: "SAVUNMA Ustası rozeti açıldı",
-    time: "2 gün",
-    color: Colors.purple,
-    urgent: false,
+    id: "n2",
+    type: "pvp",
+    title: "Bolgen saldiri altinda!",
+    body: "Mahallendeki bir rakip bolgeni ele geciriyor.",
+    time: "7 dk once",
+    unread: true,
+  },
+  {
+    id: "n3",
+    type: "event",
+    title: "Gold Rush etkinligi basladi.",
+    body: "Antalya merkezde odullu alanlar aktif.",
+    time: "18 dk once",
+    unread: true,
+  },
+  {
+    id: "n4",
+    type: "mission",
+    title: "Yeni gorev acildi.",
+    body: "Bugunku fetih bonusunu kacirma.",
+    time: "43 dk once",
+    unread: false,
+  },
+  {
+    id: "n5",
+    type: "signal",
+    title: "Premium radar sinyali algilandi.",
+    body: "Yakininda yuksek degerli bir iz var.",
+    time: "1 sa once",
+    unread: false,
   },
 ];
 
-function EventCard({ event }: { event: typeof EVENTS[0] }) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        event.urgent && styles.cardUrgent,
-        { borderLeftColor: event.color },
-      ]}
-    >
-      <View style={[styles.iconCircle, { backgroundColor: `${event.color}18` }]}>
-        <Text style={styles.iconEmoji}>{event.icon}</Text>
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, event.urgent && { color: event.color }]}>{event.title}</Text>
-        <Text style={styles.cardBody}>{event.body}</Text>
-      </View>
-      <View style={styles.cardRight}>
-        <Text style={styles.timeText}>{event.time}</Text>
-        {event.urgent && (
-          <View style={[styles.urgentDot, { backgroundColor: event.color }]} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+function accentByType(type: NotificationItem["type"]) {
+  if (type === "reward") return "gold" as const;
+  if (type === "pvp") return "danger" as const;
+  if (type === "event") return "cyan" as const;
+  if (type === "signal") return "cyan" as const;
+  return "default" as const;
+}
+
+function iconByType(type: NotificationItem["type"]) {
+  if (type === "reward") return <Gift size={16} color={theme.colors.goldReward} />;
+  if (type === "pvp") return <ShieldAlert size={16} color={theme.colors.danger} />;
+  if (type === "event") return <Trophy size={16} color={theme.colors.primaryCyan} />;
+  if (type === "signal") return <Crosshair size={16} color={theme.colors.primaryCyan} />;
+  return <Target size={16} color={theme.colors.textSecondary} />;
 }
 
 export default function NotificationsScreen() {
-  const urgentCount = EVENTS.filter((e) => e.urgent).length;
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [activeFilter, setActiveFilter] = useState<NotificationFilter>("all");
+  const [items, setItems] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+
+  const filteredItems = useMemo(() => {
+    if (activeFilter === "all") return items;
+    return items.filter((item) => item.type === activeFilter);
+  }, [activeFilter, items]);
+
+  const unreadCount = useMemo(() => items.filter((item) => item.unread).length, [items]);
+
+  const bottomTabs = [
+    { key: "map" as const, label: "Harita", icon: <MapIcon size={16} color={theme.colors.textMuted} /> },
+    { key: "missions" as const, label: "Gorev", icon: <Waypoints size={16} color={theme.colors.textMuted} /> },
+    { key: "feed" as const, label: "Feed", icon: <ShoppingBag size={16} color={theme.colors.textMuted} /> },
+    { key: "notifications" as const, label: "Bildirim", icon: <Bell size={16} color={theme.colors.primaryCyan} /> },
+    { key: "profile" as const, label: "Profil", icon: <User size={16} color={theme.colors.textMuted} /> },
+  ];
+
+  const markAsRead = (id: string) => {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, unread: false } : item)));
+  };
+
+  const navigateByNotificationType = (type: NotificationItem["type"]) => {
+    if (type === "reward") {
+      router.push(ROUTES.hiddenRewardFound);
+      return;
+    }
+    if (type === "event") {
+      router.push(ROUTES.events);
+      return;
+    }
+    if (type === "mission") {
+      router.push(ROUTES.tabs.missions);
+      return;
+    }
+    if (type === "signal") {
+      router.push(ROUTES.premium);
+      return;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerLabel}>OYUN OLAYLARI</Text>
-          <Text style={styles.title}>Olay Merkezi</Text>
+      <AmbientGlow cyanOpacity={0.04} purpleOpacity={0.03} />
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: getTabContentBottomSpace(insets.bottom, 30) }]}
+        showsVerticalScrollIndicator={false}
+        decelerationRate="fast"
+      >
+        <View style={styles.headerWrap}>
+          <View style={styles.titleRow}>
+            <View>
+              <AlanGoLogo size="sm" glow="none" />
+              <Text style={styles.title}>Bildirimler</Text>
+            </View>
+            <View style={styles.unreadBadge}>
+              <Sparkles size={11} color={theme.colors.primaryCyan} />
+              <Text style={styles.unreadBadgeText}>{unreadCount} yeni</Text>
+            </View>
+          </View>
+          <HelperText text="Oyun, odul ve PvP hareketleri burada toplanir." />
         </View>
-        {urgentCount > 0 && (
-          <View style={styles.urgentBadge}>
-            <View style={styles.urgentDotBig} />
-            <Text style={styles.urgentText}>{urgentCount} acil</Text>
+
+        <GlassCard contentStyle={styles.filterCardContent}>
+          <SegmentedSelector options={FILTERS} value={activeFilter} onChange={setActiveFilter} />
+        </GlassCard>
+
+        {filteredItems.length === 0 ? (
+          <EmptyRadarState
+            title="Radar sinyali bekleniyor..."
+            message="Sehrinde aktif odul bulunamadi. Yeni bildirim geldiginde burada gorulecek."
+          />
+        ) : (
+          <View style={styles.listWrap}>
+            {filteredItems.map((item) => (
+              <NotificationCard
+                key={item.id}
+                icon={iconByType(item.type)}
+                title={item.title}
+                body={item.body}
+                time={item.time}
+                unread={item.unread}
+                accent={accentByType(item.type)}
+                onPress={() => {
+                  markAsRead(item.id);
+                  navigateByNotificationType(item.type);
+                }}
+              />
+            ))}
           </View>
         )}
-      </View>
 
-      {/* Urgent section */}
-      {EVENTS.some((e) => e.urgent) && (
-        <View style={styles.urgentSection}>
-          <Text style={styles.sectionLabel}>🔴  ACİL</Text>
-          {EVENTS.filter((e) => e.urgent).map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
-        </View>
-      )}
-
-      {/* All events */}
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>TÜM OLAYLAR</Text>
-        {EVENTS.filter((e) => !e.urgent).map((event) => (
-          <EventCard key={event.id} event={event} />
-        ))}
-        <View style={{ height: 32 }} />
       </ScrollView>
+
+      <BottomTabBar<BottomKey>
+        tabs={bottomTabs}
+        activeKey="notifications"
+        onTabPress={(key) => {
+          if (key === "map") router.push(ROUTES.tabs.map);
+          if (key === "missions") router.push(ROUTES.tabs.missions);
+          if (key === "feed") router.push(ROUTES.tabs.feed);
+          if (key === "notifications") return;
+          if (key === "profile") router.push(ROUTES.tabs.profile);
+        }}
+        style={styles.bottomTabs}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.backgroundDeep,
+  },
+  content: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.md,
+  },
+  headerWrap: {
+    gap: 4,
+  },
+  titleRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 16,
   },
-  headerLabel: { fontSize: 10, fontWeight: "700", color: Colors.textMuted, letterSpacing: 1.5, marginBottom: 2 },
-  title: { fontSize: 24, fontWeight: "800", color: Colors.textPrimary },
-  urgentBadge: {
+  title: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 28,
+  },
+  unreadBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: `${Colors.coral}15`,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
+    gap: 5,
+    borderRadius: theme.radius.full,
     borderWidth: 1,
-    borderColor: `${Colors.coral}40`,
+    borderColor: "rgba(0, 229, 204, 0.34)",
+    backgroundColor: "rgba(0, 229, 204, 0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
-  urgentDotBig: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.coral },
-  urgentText: { fontSize: 12, fontWeight: "700", color: Colors.coral },
-  urgentSection: { paddingHorizontal: 20, marginBottom: 8 },
-  scroll: { flex: 1, paddingHorizontal: 20 },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: Colors.textSecondary,
-    letterSpacing: 1.5,
-    marginBottom: 10,
-    paddingHorizontal: 20,
+  unreadBadgeText: {
+    color: theme.colors.primaryCyan,
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 11,
   },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderTopWidth: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderTopColor: Colors.surfaceBorder,
-    borderRightColor: Colors.surfaceBorder,
-    borderBottomColor: Colors.surfaceBorder,
-    gap: 12,
+  filterCardContent: {
+    gap: 0,
   },
-  cardUrgent: { backgroundColor: "rgba(240, 106, 90, 0.06)" },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+  listWrap: {
+    gap: theme.spacing.sm,
   },
-  iconEmoji: { fontSize: 20 },
-  cardContent: { flex: 1 },
-  cardTitle: { fontSize: 14, fontWeight: "700", color: Colors.textPrimary, marginBottom: 3 },
-  cardBody: { fontSize: 12, color: Colors.textSecondary, lineHeight: 17 },
-  cardRight: { alignItems: "flex-end", gap: 6 },
-  timeText: { fontSize: 11, color: Colors.textMuted },
-  urgentDot: { width: 8, height: 8, borderRadius: 4 },
+  bottomTabs: {
+    borderTopColor: theme.colors.borderSubtle,
+  },
 });
+

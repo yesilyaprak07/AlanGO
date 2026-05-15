@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
+import { ROUTES } from "@/constants/routes";
 
 const PLAYER_COLORS = [
   { id: "cyan", hex: "#5BC8E0" },
@@ -24,7 +25,7 @@ export default function OnboardingStep2() {
 
   const handleContinue = () => {
     if (username.trim()) {
-      router.push("/(onboarding)/step3");
+      router.push(ROUTES.onboarding.step3);
     }
   };
 

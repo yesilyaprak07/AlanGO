@@ -1,0 +1,31 @@
+export const ROUTES = {
+  tabs: {
+    map: "/(tabs)/map",
+    discover: "/(tabs)/discover",
+    missions: "/(tabs)/missions",
+    feed: "/(tabs)/feed",
+    store: "/(tabs)/store",
+    profile: "/(tabs)/profile",
+    leaderboard: "/(tabs)/leaderboard",
+    settings: "/(tabs)/settings",
+    notifications: "/(tabs)/notifications",
+  },
+  auth: {
+    signin: "/(auth)/signin",
+    signup: "/(auth)/signup",
+  },
+  onboarding: {
+    step1: "/(onboarding)/step1",
+    step2: "/(onboarding)/step2",
+    step3: "/(onboarding)/step3",
+  },
+  activeGame: "/active-game",
+  killDeath: "/kill-death",
+  events: "/events",
+  mysteryBox: "/mystery-box",
+  premium: "/premium",
+  hiddenRewardFound: "/hidden-reward-found",
+  rewardClaim: "/reward-claim",
+  result: "/result",
+  notFound: "/+not-found",
+} as const;

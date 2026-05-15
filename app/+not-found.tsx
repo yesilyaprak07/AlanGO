@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
+import { ROUTES } from "@/constants/routes";
 
 export default function NotFoundScreen() {
   const router = useRouter();
@@ -13,7 +14,7 @@ export default function NotFoundScreen() {
         <Text style={styles.title}>Sayfa Bulunamadı</Text>
         <Text style={styles.subtitle}>Aradığınız sayfa mevcut değil veya taşınmış.</Text>
       </View>
-      <TouchableOpacity style={styles.button} onPress={() => router.replace("/(tabs)/map")}>
+      <TouchableOpacity style={styles.button} onPress={() => router.replace(ROUTES.tabs.map)}>
         <ArrowLeft size={20} color={Colors.background} />
         <Text style={styles.buttonText}>Haritaya Dön</Text>
       </TouchableOpacity>
