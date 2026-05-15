@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"f:/Mobile_APP_Dosyalar/AlanGO/expo/app/\\(tabs\\)\")",
+      "Bash(ls -la \"f:/Mobile_APP_Dosyalar/AlanGO/expo/app/\\(auth\\)\")",
+      "Bash(ls -la \"f:/Mobile_APP_Dosyalar/AlanGO/expo/app/\\(onboarding\\)\")",
+      "Bash(adb devices:*)",
+      "Bash(\"C:\\\\Users\\\\Caner\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices:*)"
+    ]
+  }
+}
