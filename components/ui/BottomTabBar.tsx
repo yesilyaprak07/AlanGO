@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/constants/theme";
 
@@ -30,57 +31,73 @@ export function BottomTabBar<T extends string>({
   const bottomInset = safeBottomInset || insets.bottom;
 
   return (
-    <View style={[styles.container, { paddingBottom: theme.spacing.xs + bottomInset }, style]}>
-      {tabs.map((tab) => {
-        const active = tab.key === activeKey;
+    <View style={[styles.wrap, { paddingBottom: bottomInset + 10 }, style]}>
+      <BlurView intensity={24} tint="dark" style={styles.container}>
+        {tabs.map((tab) => {
+          const active = tab.key === activeKey;
 
-        return (
-          <Pressable
-            key={tab.key}
-            disabled={tab.disabled}
-            hitSlop={theme.ux.hitSlop}
-            pressRetentionOffset={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            onPress={() => onTabPress(tab.key)}
-            style={({ pressed }) => [styles.item, active && styles.itemActive, pressed && styles.itemPressed, tab.disabled && styles.itemDisabled]}
-          >
-            <View style={styles.iconWrap}>
-              {typeof tab.icon === "string" ? <Text style={[styles.iconText, active && styles.iconTextActive]}>{tab.icon}</Text> : tab.icon}
-              {typeof tab.badgeCount === "number" && tab.badgeCount > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{tab.badgeCount > 99 ? "99+" : tab.badgeCount}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
-          </Pressable>
-        );
-      })}
+          return (
+            <Pressable
+              key={tab.key}
+              disabled={tab.disabled}
+              hitSlop={theme.ux.hitSlop}
+              pressRetentionOffset={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={() => onTabPress(tab.key)}
+              style={({ pressed }) => [styles.item, active && styles.itemActive, pressed && styles.itemPressed, tab.disabled && styles.itemDisabled]}
+            >
+              <View style={styles.iconWrap}>
+                {typeof tab.icon === "string" ? <Text style={[styles.iconText, active && styles.iconTextActive]}>{tab.icon}</Text> : tab.icon}
+                {typeof tab.badgeCount === "number" && tab.badgeCount > 0 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{tab.badgeCount > 99 ? "99+" : tab.badgeCount}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
+            </Pressable>
+          );
+        })}
+      </BlurView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 6,
+  },
   container: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-around",
-    paddingTop: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.sm,
-    backgroundColor: "rgba(6, 16, 24, 0.96)",
+    justifyContent: "space-between",
+    height: 92,
+    borderRadius: 32,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(10, 14, 39, 0.95)",
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderSubtle,
+    borderColor: "rgba(120, 160, 180, 0.24)",
+    overflow: "hidden",
   },
   item: {
-    minWidth: 64,
-    minHeight: 44,
+    flex: 1,
+    minHeight: 64,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.sm,
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
   itemActive: {
-    backgroundColor: "rgba(0, 229, 204, 0.14)",
+    backgroundColor: "rgba(16, 244, 232, 0.08)",
+    shadowColor: "#10F4E8",
+    shadowOpacity: 0.32,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 10,
+    elevation: 5,
   },
   itemPressed: {
     opacity: 0.85,
@@ -92,36 +109,36 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   iconText: {
-    color: theme.colors.textMuted,
-    fontSize: theme.typography.size.base,
+    color: "#6F7A86",
+    fontSize: 20,
     fontFamily: theme.typography.fontFamily.bold,
   },
   iconTextActive: {
-    color: theme.colors.primaryCyan,
+    color: "#10F4E8",
   },
   label: {
-    marginTop: 4,
-    color: theme.colors.textMuted,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.size.xs,
+    marginTop: 6,
+    color: "#A9B4C0",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 14,
   },
   labelActive: {
-    color: theme.colors.primaryCyan,
+    color: "#10F4E8",
   },
   badge: {
     position: "absolute",
-    right: -10,
-    top: -8,
+    right: -8,
+    top: -7,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: theme.colors.danger,
+    backgroundColor: "#EF4444",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
   },
   badgeText: {
-    color: theme.colors.textPrimary,
+    color: "#FFFFFF",
     fontSize: 10,
     fontFamily: theme.typography.fontFamily.semibold,
     includeFontPadding: false,

@@ -1,44 +1,42 @@
-import { useMemo, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  CalendarDays,
-  Camera,
+  Bell,
   ChevronDown,
   ChevronRight,
+  Crown,
   Crosshair,
+  ClipboardCheck,
+  FlagTriangleRight,
+  Footprints,
   Gem,
-  Hexagon,
-  History,
-  Layers,
-  LocateFixed,
-  Search,
+  Gift,
+  HelpCircle,
+  LogOut,
+  Map,
+  Medal,
+  Plus,
+  Settings,
+  Shield,
+  ShoppingCart,
+  Skull,
+  Star,
   Trophy,
-  Users,
+  User,
+  X,
 } from "lucide-react-native";
 import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import { darkMapStyle } from "@/constants/mapStyles";
 import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
+import { BottomTabBar } from "@/components/ui";
 
 const FALLBACK_CENTER = { latitude: 36.8969, longitude: 30.7133 };
+const HUD_SIDE_GAP = 7;
 
-type ModeKey = "private" | "solo" | "group";
-type BottomKey = "leaderboard" | "events" | "zones" | "history";
-
-const modeOptions: { key: ModeKey; label: string }[] = [
-  { key: "private", label: "Özel Lobi" },
-  { key: "solo", label: "Tek Kişi" },
-  { key: "group", label: "Grubum" },
-];
-
-const bottomItems: { key: BottomKey; label: string; icon: React.ReactNode }[] = [
-  { key: "leaderboard", label: "Liderlik", icon: <Trophy size={20} color={theme.colors.primaryCyan} /> },
-  { key: "events", label: "Etkinlikler", icon: <CalendarDays size={20} color={theme.colors.textMuted} /> },
-  { key: "zones", label: "Bölgeler", icon: <Hexagon size={20} color={theme.colors.textMuted} /> },
-  { key: "history", label: "Geçmiş", icon: <History size={20} color={theme.colors.textMuted} /> },
-];
+type BottomKey = "map" | "leaderboard" | "rewards" | "store";
 
 function offset(center: { latitude: number; longitude: number }, lat: number, lng: number) {
   return {
@@ -50,62 +48,72 @@ function offset(center: { latitude: number; longitude: number }, lat: number, ln
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [activeMode, setActiveMode] = useState<ModeKey>("solo");
+  const { width } = useWindowDimensions();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuAnim = useRef(new Animated.Value(0)).current;
 
   const center = FALLBACK_CENTER;
   const initialRegion = {
     ...center,
-    latitudeDelta: 0.013,
-    longitudeDelta: 0.013,
+    latitudeDelta: 0.014,
+    longitudeDelta: 0.014,
   };
 
   const territories = useMemo(
     () => [
       {
         id: "cyan",
-        stroke: "#66F6FF",
-        fill: "rgba(102, 246, 255, 0.22)",
+        stroke: "#10F4E8",
+        fill: "rgba(16, 244, 232, 0.16)",
+        icon: <Shield size={8} color="#B9FFF8" />,
+        badge: offset(center, 0.0002, -0.0002),
         nodes: [
-          offset(center, 0.0020, -0.0046),
-          offset(center, 0.0039, -0.0029),
-          offset(center, 0.0030, -0.0004),
-          offset(center, 0.0012, 0.0010),
-          offset(center, -0.0013, -0.0006),
-          offset(center, -0.0010, -0.0033),
+          offset(center, 0.0022, -0.0045),
+          offset(center, 0.0038, -0.0025),
+          offset(center, 0.0030, -0.0001),
+          offset(center, 0.0011, 0.0011),
+          offset(center, -0.0014, -0.0007),
+          offset(center, -0.0011, -0.0033),
         ],
       },
       {
         id: "red",
-        stroke: "#FF5656",
-        fill: "rgba(255, 86, 86, 0.18)",
+        stroke: "#FF3B4F",
+        fill: "rgba(255, 59, 79, 0.17)",
+        icon: <Skull size={8} color="#FF8D97" />,
+        badge: offset(center, 0.0006, -0.0084),
         nodes: [
-          offset(center, 0.0016, -0.0083),
-          offset(center, 0.0000, -0.0068),
-          offset(center, -0.0017, -0.0079),
+          offset(center, 0.0017, -0.0082),
+          offset(center, -0.0001, -0.0068),
+          offset(center, -0.0016, -0.0078),
           offset(center, -0.0010, -0.0106),
-          offset(center, 0.0010, -0.0109),
+          offset(center, 0.0011, -0.0108),
         ],
       },
       {
         id: "purple",
-        stroke: "#D06BFF",
-        fill: "rgba(186, 72, 255, 0.20)",
+        stroke: "#9B5CFF",
+        fill: "rgba(155, 92, 255, 0.18)",
+        icon: <Crown size={8} color="#D0B0FF" />,
+        badge: offset(center, -0.0024, 0.0037),
         nodes: [
           offset(center, -0.0012, 0.0012),
-          offset(center, 0.0002, 0.0037),
-          offset(center, -0.0013, 0.0068),
-          offset(center, -0.0038, 0.0055),
-          offset(center, -0.0045, 0.0020),
+          offset(center, 0.0003, 0.0037),
+          offset(center, -0.0014, 0.0069),
+          offset(center, -0.0038, 0.0054),
+          offset(center, -0.0045, 0.0021),
         ],
       },
       {
         id: "gold",
-        stroke: "#FFD15C",
-        fill: "rgba(255, 209, 92, 0.20)",
+        stroke: "#FFC83D",
+        fill: "rgba(255, 200, 61, 0.18)",
+        icon: <Star size={8} color="#FFE6A3" />,
+        badge: offset(center, -0.0058, -0.0021),
         nodes: [
-          offset(center, -0.0060, -0.0038),
-          offset(center, -0.0047, -0.0014),
-          offset(center, -0.0058, 0.0009),
+          offset(center, -0.0060, -0.0039),
+          offset(center, -0.0046, -0.0015),
+          offset(center, -0.0058, 0.0008),
           offset(center, -0.0082, -0.0004),
           offset(center, -0.0080, -0.0030),
         ],
@@ -118,6 +126,52 @@ export default function MapScreen() {
     () => territories.flatMap((t) => t.nodes.map((n) => ({ ...n, id: `${t.id}-${n.latitude}-${n.longitude}`, color: t.stroke }))),
     [territories]
   );
+
+  const tabs = [
+    { key: "map" as const, label: "Harita", icon: <Map size={12} color="#10F4E8" /> },
+    { key: "leaderboard" as const, label: "Liderlik", icon: <Trophy size={12} color="#A9B4C0" /> },
+    { key: "rewards" as const, label: "Ödüller", icon: <Gift size={12} color="#A9B4C0" /> },
+    { key: "store" as const, label: "Dükkan", icon: <ShoppingCart size={12} color="#A9B4C0" /> },
+  ];
+
+  const drawerWidth = Math.max(220, Math.floor(width * 0.5));
+
+  const menuItems = useMemo(
+    () => [
+      { key: "profile", title: "Profilim", subtitle: "Kişisel bilgilerin", icon: <User size={18} color="#7CEEFF" /> },
+      { key: "achievements", title: "Başarımlar", subtitle: "Kazandığın rozetler", icon: <Medal size={18} color="#FFCD69" /> },
+      { key: "missions", title: "Görevlerim", subtitle: "Aktif görevlerini yönet", icon: <Shield size={18} color="#7CEEFF" />, badge: 2 },
+      { key: "settings", title: "Ayarlar", subtitle: "Uygulama ayarları", icon: <Settings size={18} color="#E3E8EF" /> },
+      { key: "support", title: "Yardım ve Destek", subtitle: "Yardım al", icon: <HelpCircle size={18} color="#E3E8EF" /> },
+    ],
+    []
+  );
+
+  const openMenu = useCallback(() => {
+    setMenuOpen(true);
+    Animated.timing(menuAnim, {
+      toValue: 1,
+      duration: 260,
+      useNativeDriver: true,
+    }).start();
+  }, [menuAnim]);
+
+  const closeMenu = useCallback(() => {
+    Animated.timing(menuAnim, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setMenuOpen(false);
+      }
+    });
+  }, [menuAnim]);
+
+  const drawerTranslateX = menuAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-drawerWidth, 0],
+  });
 
   return (
     <View style={styles.container}>
@@ -132,7 +186,7 @@ export default function MapScreen() {
         toolbarEnabled={false}
       >
         {territories.map((area) => (
-          <Polygon key={area.id} coordinates={area.nodes} strokeColor={area.stroke} fillColor={area.fill} strokeWidth={2} />
+          <Polygon key={area.id} coordinates={area.nodes} strokeColor={area.stroke} fillColor={area.fill} strokeWidth={1} />
         ))}
 
         {nodePoints.map((node) => (
@@ -141,115 +195,166 @@ export default function MapScreen() {
           </Marker>
         ))}
 
-        <Marker coordinate={offset(center, -0.0065, -0.0091)} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={styles.mysteryBadge}>
-            <Text style={styles.mysteryText}>?</Text>
-          </View>
-        </Marker>
+        {territories.map((area) => (
+          <Marker key={`${area.id}-badge`} coordinate={area.badge} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={[styles.zoneBadge, { borderColor: `${area.stroke}AA`, shadowColor: area.stroke }]}>{area.icon}</View>
+          </Marker>
+        ))}
       </MapView>
 
       <SafeAreaView style={styles.topOverlay} edges={["top"]}>
         <View style={styles.topHudRow}>
-          <View style={styles.logoButton}>
-            <Hexagon size={30} color={theme.colors.primaryCyan} />
-          </View>
-
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>AL</Text>
-          </View>
+          <Pressable style={styles.avatarWrap} onPress={openMenu}>
+            <View style={styles.avatarCore}>
+              <Text style={styles.avatarText}>AL</Text>
+            </View>
+            <View style={styles.levelChip}>
+              <Text style={styles.levelText}>24</Text>
+            </View>
+          </Pressable>
 
           <View style={styles.currencyChip}>
             <View style={styles.coinIcon} />
             <Text style={styles.currencyText}>2.450</Text>
+            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
           </View>
 
           <View style={styles.currencyChip}>
-            <Gem size={16} color="#8B5CF6" fill="#8B5CF6" />
+            <Gem size={20} color="#7F9CFF" fill="#7F9CFF" />
             <Text style={styles.currencyText}>128</Text>
-            <ChevronDown size={14} color={theme.colors.textMuted} />
+            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
           </View>
 
-          <Pressable style={styles.searchButton} onPress={() => router.push(ROUTES.tabs.discover)}>
-            <Search size={18} color={theme.colors.textPrimary} />
+          <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
+            <Bell size={25} color="#FFFFFF" />
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>3</Text>
+            </View>
           </Pressable>
-        </View>
-
-        <View style={styles.modeRow}>
-          {modeOptions.map((mode) => {
-            const active = mode.key === activeMode;
-            return (
-              <Pressable key={mode.key} style={[styles.modeButton, active && styles.modeButtonActive]} onPress={() => setActiveMode(mode.key)}>
-                <Text style={[styles.modeText, active && styles.modeTextActive]}>{mode.label}</Text>
-              </Pressable>
-            );
-          })}
         </View>
       </SafeAreaView>
 
-      <View style={styles.rightRail}>
+      <View style={[styles.rightRail, { top: insets.top + 72 }]}>
+        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.map)}>
+          <Crosshair size={25} color="#CCFFF9" />
+        </Pressable>
         <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.missions)}>
-          <LocateFixed size={20} color={theme.colors.goldReward} />
+          <Shield size={25} color="#CCFFF9" />
         </Pressable>
-        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.settings)}>
-          <Crosshair size={20} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.feed)}>
-          <Camera size={20} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.store)}>
-          <Layers size={20} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.profile)}>
-          <Users size={20} color={theme.colors.textPrimary} />
+        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.missions)}>
+          <ClipboardCheck size={24} color="#CCFFF9" />
         </Pressable>
       </View>
 
-      <SafeAreaView style={[styles.bottomWrap, { paddingBottom: insets.bottom + 8 }]} edges={["bottom"]}>
-        <View style={styles.bottomCard}>
-          <View style={styles.bottomHeader}>
-            <View style={styles.bottomTitleRow}>
-              <Text style={styles.bottomTitle}>Mahallem</Text>
-              <ChevronDown size={18} color={theme.colors.textSecondary} />
+      <View pointerEvents="box-none" style={[styles.bottomStack, { paddingBottom: insets.bottom + 116 }]}>
+        <View style={styles.statsCard}>
+          <View style={styles.cityRow}>
+            <View style={styles.cityLeft}>
+              <Text style={styles.cityTitle}>Antalya</Text>
+              <ChevronDown size={10} color="#10F4E8" />
             </View>
             <Pressable onPress={() => router.push(ROUTES.tabs.leaderboard)}>
-              <ChevronRight size={22} color={theme.colors.textSecondary} />
+              <ChevronRight size={12} color="#A9B4C0" />
             </Pressable>
           </View>
 
           <View style={styles.statsRow}>
-            <View style={styles.statCol}>
+            <View style={styles.statBlock}>
               <Text style={styles.statLabel}>Sıralama</Text>
               <Text style={styles.statValue}># 3</Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.statCol}>
+            <View style={styles.statBlock}>
               <Text style={styles.statLabel}>Alanım</Text>
               <Text style={styles.statValue}>12.450 m²</Text>
             </View>
-          </View>
-
-          <View style={styles.bottomTabs}>
-            {bottomItems.map((item) => {
-              const active = item.key === "leaderboard";
-              return (
-                <Pressable
-                  key={item.key}
-                  style={[styles.bottomTab, active && styles.bottomTabActive]}
-                  onPress={() => {
-                    if (item.key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
-                    if (item.key === "events") router.push(ROUTES.events);
-                    if (item.key === "zones") router.push(ROUTES.tabs.map);
-                    if (item.key === "history") router.push(ROUTES.tabs.feed);
-                  }}
-                >
-                  {item.icon}
-                  <Text style={[styles.bottomTabText, active && styles.bottomTabTextActive]}>{item.label}</Text>
-                </Pressable>
-              );
-            })}
+            <View style={styles.statDivider} />
+            <View style={styles.statBlock}>
+              <Text style={styles.statLabel}>Mesafe</Text>
+              <Text style={styles.statValue}>8,70 km</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBlock}>
+              <Text style={styles.statLabel}>Adım</Text>
+              <View style={styles.stepRow}>
+                <Footprints size={8} color="#10F4E8" />
+                <Text style={styles.statValue}>45.210</Text>
+              </View>
+            </View>
           </View>
         </View>
-      </SafeAreaView>
+
+        <Pressable style={styles.captureButton} onPress={() => router.push(ROUTES.activeGame)}>
+          <View style={styles.captureInner}>
+            <FlagTriangleRight size={17} color="#ECFCFF" />
+            <Text style={styles.captureButtonText}>ŞİMDİ FETHET</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      <BottomTabBar<BottomKey>
+        tabs={tabs}
+        activeKey="map"
+        onTabPress={(key) => {
+          if (key === "map") router.push(ROUTES.tabs.map);
+          if (key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
+          if (key === "rewards") router.push(ROUTES.tabs.missions);
+          if (key === "store") router.push(ROUTES.tabs.store);
+        }}
+      />
+
+      {menuOpen ? (
+        <View style={styles.drawerRoot} pointerEvents="box-none">
+          <Pressable style={styles.drawerBackdrop} onPress={closeMenu} />
+          <Animated.View style={[styles.drawerPanel, { width: drawerWidth, transform: [{ translateX: drawerTranslateX }] }]}> 
+            <SafeAreaView style={styles.drawerSafe} edges={["top", "left", "bottom"]}>
+              <View style={styles.drawerHeaderRow}>
+                <Text style={styles.drawerTitle}>ALANGO</Text>
+                <Pressable style={styles.drawerCloseBtn} onPress={closeMenu}>
+                  <X size={18} color="#D5DFEA" />
+                </Pressable>
+              </View>
+
+              <View style={styles.drawerProfileRow}>
+                <View style={styles.drawerAvatar}>
+                  <Text style={styles.drawerAvatarText}>AL</Text>
+                </View>
+                <View style={styles.drawerProfileInfo}>
+                  <Text style={styles.drawerName}>CNRman</Text>
+                  <Text style={styles.drawerHandle}>ALANGO</Text>
+                </View>
+              </View>
+
+              <View style={styles.drawerXpTrack}>
+                <View style={styles.drawerXpFill} />
+                <Text style={styles.drawerXpText}>202 / 1200 XP</Text>
+              </View>
+
+              <View style={styles.drawerMenuList}>
+                {menuItems.map((item) => (
+                  <Pressable key={item.key} style={styles.drawerMenuItem}>
+                    <View style={styles.drawerMenuIconWrap}>{item.icon}</View>
+                    <View style={styles.drawerMenuTextWrap}>
+                      <Text style={styles.drawerMenuTitle}>{item.title}</Text>
+                      <Text style={styles.drawerMenuSubtitle}>{item.subtitle}</Text>
+                    </View>
+                    {item.badge ? (
+                      <View style={styles.drawerBadge}>
+                        <Text style={styles.drawerBadgeText}>{item.badge}</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </View>
+
+              <Pressable style={styles.drawerLogoutRow}>
+                <LogOut size={18} color="#FF5A5A" />
+                <Text style={styles.drawerLogoutText}>Çıkış Yap</Text>
+              </Pressable>
+            </SafeAreaView>
+          </Animated.View>
+        </View>
+      ) : null}
 
       <SafeAreaView style={styles.topFade} pointerEvents="none" edges={["top"]} />
     </View>
@@ -259,242 +364,430 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#02060C",
+    backgroundColor: "#02070D",
   },
   topOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 16,
-    zIndex: 2,
+    paddingHorizontal: HUD_SIDE_GAP,
+    zIndex: 4,
   },
   topHudRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginTop: 6,
+    marginTop: 1,
   },
-  logoButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: "rgba(7, 18, 31, 0.9)",
-    borderWidth: 1,
-    borderColor: "rgba(110, 232, 255, 0.34)",
+  avatarWrap: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    borderWidth: 1.5,
+    borderColor: "rgba(16, 244, 232, 0.85)",
+    backgroundColor: "rgba(8, 18, 28, 0.65)",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#10F4E8",
+    shadowOpacity: 0.42,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 8,
+    elevation: 4,
   },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  avatarCore: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
     backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.22)",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    color: theme.colors.textPrimary,
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 19,
+  },
+  levelChip: {
+    position: "absolute",
+    right: -6,
+    bottom: -5,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 11,
+    backgroundColor: "rgba(8, 18, 28, 0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.42)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  levelText: {
+    color: "#FFFFFF",
     fontFamily: theme.typography.fontFamily.bold,
     fontSize: 16,
   },
   currencyChip: {
-    minWidth: 112,
-    height: 44,
+    width: 109,
+    height: 42,
     borderRadius: 22,
-    backgroundColor: "rgba(6, 16, 28, 0.86)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
     borderWidth: 1,
-    borderColor: "rgba(146, 168, 194, 0.25)",
+    borderColor: "rgba(120, 160, 180, 0.22)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
-    paddingHorizontal: 12,
+    gap: 6,
   },
   coinIcon: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: "#FFCF4D",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FFC83D",
+    borderWidth: 1,
+    borderColor: "#FFE08E",
   },
   currencyText: {
-    color: theme.colors.textPrimary,
+    color: "#FFFFFF",
     fontFamily: theme.typography.fontFamily.semibold,
     fontSize: 16,
   },
-  searchButton: {
-    marginLeft: "auto",
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  bellButton: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(174, 190, 210, 0.34)",
-    backgroundColor: "rgba(6, 16, 28, 0.86)",
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
     alignItems: "center",
     justifyContent: "center",
   },
-  modeRow: {
-    marginTop: 12,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(174, 190, 210, 0.24)",
-    backgroundColor: "rgba(7, 17, 30, 0.84)",
-    flexDirection: "row",
-    padding: 3,
-  },
-  modeButton: {
-    flex: 1,
-    height: 45,
-    borderRadius: 19,
+  bellBadge: {
+    position: "absolute",
+    right: -4,
+    top: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#10F4E8",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 4,
   },
-  modeButtonActive: {
-    backgroundColor: "rgba(84, 248, 255, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(84, 248, 255, 0.62)",
-  },
-  modeText: {
-    color: "rgba(226, 235, 245, 0.86)",
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 17,
-  },
-  modeTextActive: {
-    color: "#A9FAFF",
+  bellBadgeText: {
+    color: "#043038",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 12,
   },
   rightRail: {
     position: "absolute",
-    right: 14,
-    top: "28%",
-    gap: 14,
-    zIndex: 2,
+    right: HUD_SIDE_GAP + 6,
+    gap: 16,
+    zIndex: 4,
   },
   railBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 55,
+    height: 55,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(174, 190, 210, 0.34)",
-    backgroundColor: "rgba(7, 18, 31, 0.86)",
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    shadowColor: "#10F4E8",
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 5,
+    elevation: 4,
   },
   nodeDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: "#DBF7FF",
-    borderWidth: 1.5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E9FCFF",
+    borderWidth: 0.7,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  mysteryBadge: {
-    width: 66,
-    height: 74,
-    borderRadius: 16,
-    backgroundColor: "rgba(19, 29, 42, 0.9)",
+  zoneBadge: {
+    width: 23,
+    height: 27,
+    borderRadius: 7,
     borderWidth: 1,
-    borderColor: "rgba(255, 199, 87, 0.6)",
+    backgroundColor: "rgba(8, 18, 28, 0.9)",
     alignItems: "center",
     justifyContent: "center",
+    shadowOpacity: 0.42,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 5,
+    elevation: 4,
   },
-  mysteryText: {
-    color: "#FFD15C",
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 46,
-    lineHeight: 50,
-  },
-  bottomWrap: {
+  bottomStack: {
     position: "absolute",
-    left: 12,
-    right: 12,
+    left: 6,
+    right: 6,
     bottom: 0,
-    zIndex: 3,
+    zIndex: 5,
+    gap: 5,
   },
-  bottomCard: {
-    borderRadius: 24,
+  statsCard: {
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: "rgba(148, 168, 190, 0.24)",
-    backgroundColor: "rgba(5, 16, 30, 0.92)",
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    minHeight: 79,
   },
-  bottomHeader: {
+  cityRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 7,
   },
-  bottomTitleRow: {
+  cityLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
   },
-  bottomTitle: {
-    color: theme.colors.textPrimary,
+  cityTitle: {
+    color: "#FFFFFF",
     fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 32,
+    fontSize: 17,
   },
   statsRow: {
     flexDirection: "row",
     alignItems: "stretch",
-    marginBottom: 14,
   },
-  statCol: {
+  statBlock: {
     flex: 1,
-    gap: 6,
-  },
-  statLabel: {
-    color: theme.colors.textMuted,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: 14,
-  },
-  statValue: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 41,
+    gap: 3,
   },
   statDivider: {
     width: 1,
-    marginHorizontal: 16,
-    backgroundColor: "rgba(148, 168, 190, 0.24)",
+    marginHorizontal: 7,
+    backgroundColor: "rgba(120, 160, 180, 0.22)",
   },
-  bottomTabs: {
-    borderTopWidth: 1,
-    borderTopColor: "rgba(148, 168, 190, 0.24)",
-    paddingTop: 10,
+  statLabel: {
+    color: "#A9B4C0",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 8,
+  },
+  statValue: {
+    color: "#6EEFF7",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 17,
+  },
+  stepRow: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 3,
   },
-  bottomTab: {
+  captureButton: {
+    height: 36,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(161, 255, 249, 0.7)",
+    backgroundColor: "rgba(84, 209, 216, 0.72)",
+    shadowColor: "#10F4E8",
+    shadowOpacity: 0.28,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  captureInner: {
     flex: 1,
-    borderRadius: 14,
-    paddingVertical: 9,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
   },
-  bottomTabActive: {
-    backgroundColor: "rgba(84, 248, 255, 0.08)",
-  },
-  bottomTabText: {
-    color: "rgba(210, 221, 234, 0.72)",
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 13,
-  },
-  bottomTabTextActive: {
-    color: theme.colors.primaryCyan,
+  captureButtonText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 15,
+    letterSpacing: 0.35,
   },
   topFade: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    height: 170,
-    backgroundColor: "rgba(4, 12, 22, 0.28)",
+    height: 85,
+    backgroundColor: "rgba(3, 10, 17, 0.24)",
+  },
+  drawerRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+  },
+  drawerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(1, 6, 12, 0.44)",
+  },
+  drawerPanel: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRightWidth: 1,
+    borderRightColor: "rgba(120, 160, 180, 0.32)",
+    backgroundColor: "rgba(1, 12, 22, 0.96)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.45,
+    shadowOffset: { width: 8, height: 0 },
+    shadowRadius: 20,
+    elevation: 14,
+  },
+  drawerSafe: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  drawerHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  drawerTitle: {
+    color: "#7CEEFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 15,
+    letterSpacing: 0.4,
+  },
+  drawerCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.26)",
+    backgroundColor: "rgba(8, 18, 28, 0.75)",
+  },
+  drawerProfileRow: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  drawerAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(16, 244, 232, 0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(11, 24, 36, 0.82)",
+  },
+  drawerAvatarText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 18,
+  },
+  drawerProfileInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  drawerName: {
+    color: "#F6FBFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 20,
+  },
+  drawerHandle: {
+    color: "#5FDDE8",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 14,
+  },
+  drawerXpTrack: {
+    marginTop: 16,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.26)",
+    backgroundColor: "rgba(8, 18, 28, 0.84)",
+    overflow: "hidden",
+    justifyContent: "center",
+  },
+  drawerXpFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: "33%",
+    backgroundColor: "rgba(124, 238, 255, 0.7)",
+  },
+  drawerXpText: {
+    color: "#EAF4FF",
+    textAlign: "center",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 14,
+  },
+  drawerMenuList: {
+    marginTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(120, 160, 180, 0.18)",
+  },
+  drawerMenuItem: {
+    minHeight: 66,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(120, 160, 180, 0.18)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  drawerMenuIconWrap: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drawerMenuTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  drawerMenuTitle: {
+    color: "#F1F5FB",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 18,
+  },
+  drawerMenuSubtitle: {
+    color: "#9EABB9",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 13,
+  },
+  drawerBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+    backgroundColor: "#FF5F5A",
+  },
+  drawerBadgeText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 12,
+  },
+  drawerLogoutRow: {
+    marginTop: "auto",
+    marginBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 90, 90, 0.35)",
+    backgroundColor: "rgba(255, 60, 60, 0.08)",
+    paddingHorizontal: 12,
+  },
+  drawerLogoutText: {
+    color: "#FF6D6D",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 16,
   },
 });

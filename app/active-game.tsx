@@ -1,30 +1,37 @@
-import { View, Text, StyleSheet, Animated, Pressable, Platform, useWindowDimensions } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Flag, Pause, Radar, Shield, Timer, X } from "lucide-react-native";
-import { useEffect, useState, useRef, useCallback } from "react";
-import MapView, { Marker, Polyline, Polygon, Circle, PROVIDER_GOOGLE } from "react-native-maps";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Bell,
+  Crown,
+  Flag,
+  Footprints,
+  Gem,
+  Gift,
+  Map,
+  Pause,
+  Plus,
+  Shield,
+  ShoppingCart,
+  Square,
+  Timer,
+  Trophy,
+} from "lucide-react-native";
+import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
 import { useGameStore, computePolygonArea } from "@/stores/gameStore";
 import { darkMapStyle } from "@/constants/mapStyles";
-import { GlassCard, NeonButton, TopModeSwitcher } from "@/components/ui";
 import { theme } from "@/constants/theme";
-import { GlowPulseView, ShimmerBadge } from "@/components/motion";
 import { ROUTES } from "@/constants/routes";
-import { getBottomCtaPadding, isCompactHeight, isNarrowWidth } from "@/constants/safeArea";
+import { BottomTabBar } from "@/components/ui";
 
 const FALLBACK = { latitude: 36.8969, longitude: 30.7133 };
 const CLOSE_DISTANCE_THRESHOLD = 30;
 const MIN_TRAIL_POINTS = 10;
 const SPEED_LIMIT_KMH = 25;
 
-type ModeKey = "private" | "solo" | "squad";
-
-const RUN_MODE_OPTIONS: { key: ModeKey; label: string }[] = [
-  { key: "private", label: "Özel Lobi" },
-  { key: "solo", label: "Tek Kişi" },
-  { key: "squad", label: "Grubum" },
-];
+type BottomKey = "map" | "leaderboard" | "rewards" | "store";
 
 function getDistanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
   const R = 6371000;
@@ -37,83 +44,35 @@ function getDistanceMeters(a: { latitude: number; longitude: number }, b: { lati
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function formatTime(seconds: number): string {
-  const m = String(Math.floor(seconds / 60)).padStart(2, "0");
-  const s = String(seconds % 60).padStart(2, "0");
-  return `${m}:${s}`;
+function formatClock(seconds: number): string {
+  const hh = String(Math.floor(seconds / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+  const ss = String(seconds % 60).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
 }
 
-function ActionCircleButton({
-  icon,
-  label,
-  compact = false,
-  onPress,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  compact?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable style={({ pressed }) => [styles.actionCircle, compact && styles.actionCircleCompact, pressed && styles.pressed]} onPress={onPress}>
-      <View style={styles.actionCircleIcon}>{icon}</View>
-      {!compact ? <Text style={styles.actionCircleText}>{label}</Text> : null}
-    </Pressable>
-  );
-}
-
-function SafeTop({ insetsTop, children }: { insetsTop: number; children: React.ReactNode }) {
-  return <View style={[styles.topOverlay, { paddingTop: insetsTop + 6 }]}>{children}</View>;
-}
-
-function AnimatedMetricValue({ value }: { value: string }) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    opacity.setValue(0.35);
-    translateY.setValue(4);
-
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [opacity, translateY, value]);
-
-  return <Animated.Text style={[styles.metricNumber, { opacity, transform: [{ translateY }] }]}>{value}</Animated.Text>;
+function offset(center: { latitude: number; longitude: number }, lat: number, lng: number) {
+  return {
+    latitude: center.latitude + lat,
+    longitude: center.longitude + lng,
+  };
 }
 
 export default function ActiveGameScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
   const { addTerritory, setLastRun, territories } = useGameStore();
 
   const [currentPos, setCurrentPos] = useState<{ latitude: number; longitude: number } | null>(null);
   const [trail, setTrail] = useState<{ latitude: number; longitude: number }[]>([]);
-  const startPoint = useRef<{ latitude: number; longitude: number } | null>(null);
   const [totalDistance, setTotalDistance] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [speed, setSpeed] = useState(0);
-  const [closed, setClosed] = useState(false);
-  const [nearStart, setNearStart] = useState(false);
-  const [liveArea, setLiveArea] = useState(0);
   const [speedViolation, setSpeedViolation] = useState(false);
-  const [activeMode, setActiveMode] = useState<ModeKey>("solo");
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const finishPulse = useRef(new Animated.Value(0)).current;
-  const gpsPulse = useRef(new Animated.Value(0)).current;
-  const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const compactHeight = isCompactHeight(height);
-  const narrow = isNarrowWidth(width);
+  const [closed, setClosed] = useState(false);
+  const [liveArea, setLiveArea] = useState(0);
+  const startPoint = useRef<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     if (closed) return;
@@ -122,67 +81,32 @@ export default function ActiveGameScreen() {
   }, [closed]);
 
   useEffect(() => {
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.8, duration: 1200, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-      ])
-    );
-
-    pulseLoop.start();
-
-    return () => {
-      pulseLoop.stop();
-    };
-  }, [pulseAnim]);
-
-  useEffect(() => {
-    const finishLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(finishPulse, { toValue: 1, duration: 560, useNativeDriver: true }),
-        Animated.timing(finishPulse, { toValue: 0, duration: 560, useNativeDriver: true }),
-      ])
-    );
-
-    const gpsLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(gpsPulse, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(gpsPulse, { toValue: 0, duration: 500, useNativeDriver: true }),
-      ])
-    );
-
-    finishLoop.start();
-    gpsLoop.start();
-
-    return () => {
-      finishLoop.stop();
-      gpsLoop.stop();
-    };
-  }, [finishPulse, gpsPulse]);
-
-  useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
-    let isMounted = true;
+    let mounted = true;
 
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted" || !isMounted) return;
+      if (status !== "granted" || !mounted) return;
 
       subscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 2 },
         (loc) => {
-          if (!isMounted || closed) return;
-          const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-          const rawSpeed = loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : 0;
-          setSpeed(rawSpeed);
-          setCurrentPos(coords);
+          if (!mounted || closed) return;
 
+          const coords = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          };
+
+          const rawSpeed = loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : 0;
           if (rawSpeed * 3.6 > SPEED_LIMIT_KMH) {
             setSpeedViolation(true);
             return;
           }
 
           setSpeedViolation(false);
+          setCurrentPos(coords);
+
           setTrail((prev) => {
             if (prev.length > 0) {
               const dist = getDistanceMeters(prev[prev.length - 1], coords);
@@ -192,14 +116,13 @@ export default function ActiveGameScreen() {
 
             if (prev.length === 0) {
               startPoint.current = coords;
-              mapRef.current?.animateToRegion({ ...coords, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 600);
+              mapRef.current?.animateToRegion({ ...coords, latitudeDelta: 0.0032, longitudeDelta: 0.0032 }, 500);
             }
 
             const updated = [...prev, coords];
-            if (startPoint.current && updated.length >= MIN_TRAIL_POINTS) {
-              setNearStart(getDistanceMeters(coords, startPoint.current) <= CLOSE_DISTANCE_THRESHOLD);
+            if (updated.length >= 3) {
+              setLiveArea(computePolygonArea(updated));
             }
-            if (updated.length >= 3) setLiveArea(computePolygonArea(updated));
             return updated;
           });
         }
@@ -207,21 +130,21 @@ export default function ActiveGameScreen() {
     })();
 
     return () => {
-      isMounted = false;
+      mounted = false;
       subscription?.remove();
     };
   }, [closed]);
 
-  const handleClose = () => router.replace(ROUTES.tabs.map);
+  const handlePause = () => router.replace(ROUTES.tabs.map);
 
-  const handleCapture = useCallback(() => {
-    if (closed) {
-      router.push(ROUTES.result);
+  const handleFinish = useCallback(() => {
+    if (trail.length < MIN_TRAIL_POINTS) {
+      router.replace(ROUTES.tabs.map);
       return;
     }
 
-    if (trail.length < MIN_TRAIL_POINTS) {
-      router.replace(ROUTES.tabs.map);
+    if (closed) {
+      router.push(ROUTES.result);
       return;
     }
 
@@ -232,27 +155,88 @@ export default function ActiveGameScreen() {
     setTrail(closedTrail);
     setLiveArea(area);
     setClosed(true);
-  }, [trail, closed, router, totalDistance, elapsed, addTerritory, setLastRun]);
+  }, [addTerritory, closed, elapsed, router, setLastRun, totalDistance, trail]);
 
   const region = currentPos
-    ? { ...currentPos, latitudeDelta: 0.003, longitudeDelta: 0.003 }
-    : { ...FALLBACK, latitudeDelta: 0.003, longitudeDelta: 0.003 };
+    ? { ...currentPos, latitudeDelta: 0.0032, longitudeDelta: 0.0032 }
+    : { ...FALLBACK, latitudeDelta: 0.0032, longitudeDelta: 0.0032 };
 
-  const pulseOpacity = pulseAnim.interpolate({ inputRange: [1, 1.8], outputRange: [0.4, 0] });
-  const canClose = trail.length >= MIN_TRAIL_POINTS;
-  const distKm = (totalDistance / 1000).toFixed(2);
-  const areaKm2 = (liveArea / 1_000_000).toFixed(2);
-  const shieldSeconds = Math.max(0, 150 - elapsed);
-  const trailNodes = trail.filter((_, idx) => idx % 3 === 0 || idx === trail.length - 1);
-  const hiddenRewardSignal = trail.length > 8 && !closed;
+  const distKm = (totalDistance / 1000).toFixed(2).replace(".", ",");
+  const areaM2 = Math.max(0, Math.round(liveArea));
+  const stepCount = Math.max(0, Math.round(totalDistance / 0.78));
+  const nearStart =
+    !!startPoint.current &&
+    trail.length >= MIN_TRAIL_POINTS &&
+    !!currentPos &&
+    getDistanceMeters(currentPos, startPoint.current) <= CLOSE_DISTANCE_THRESHOLD;
+
+  // Scale UI overlays to current viewport to avoid overflow on smaller phones.
+  const uiScale = useMemo(() => {
+    const widthScale = width / 430;
+    const heightScale = height / 932;
+    return Math.max(0.62, Math.min(1, Math.min(widthScale, heightScale)));
+  }, [width, height]);
+  const contentScale = uiScale * 0.6;
+  const controlsScale = Math.max(0.6885, uiScale * 0.918);
+
+  const fakeZones = useMemo(
+    () => [
+      {
+        id: "zone-cyan",
+        fill: "rgba(54, 240, 122, 0.14)",
+        stroke: "rgba(54, 240, 122, 0.42)",
+        marker: offset(region, 0.00055, 0.00025),
+        nodes: [
+          offset(region, 0.00075, 0.00005),
+          offset(region, 0.0009, 0.00035),
+          offset(region, 0.00045, 0.00065),
+          offset(region, 0.0002, 0.00025),
+        ],
+      },
+      {
+        id: "zone-purple",
+        fill: "rgba(157, 77, 255, 0.18)",
+        stroke: "rgba(157, 77, 255, 0.44)",
+        marker: offset(region, 0.00035, 0.00075),
+        nodes: [
+          offset(region, 0.00055, 0.00055),
+          offset(region, 0.0007, 0.00095),
+          offset(region, 0.0002, 0.00115),
+          offset(region, 0.00005, 0.0007),
+        ],
+      },
+      {
+        id: "zone-gold",
+        fill: "rgba(255, 184, 58, 0.17)",
+        stroke: "rgba(255, 184, 58, 0.42)",
+        marker: offset(region, -0.00035, 0.00035),
+        nodes: [
+          offset(region, -0.00005, 0.00015),
+          offset(region, -0.00015, 0.00065),
+          offset(region, -0.0006, 0.0007),
+          offset(region, -0.0008, 0.00025),
+        ],
+      },
+    ],
+    [region]
+  );
+
+  const routeNodes = trail.filter((_, idx) => idx % 2 === 0 || idx === trail.length - 1);
+
+  const bottomTabs: { key: BottomKey; label: string; icon: React.ReactNode; badge?: boolean }[] = [
+    { key: "map", label: "Harita", icon: <Map size={12} color="#10F4E8" /> },
+    { key: "leaderboard", label: "Liderlik", icon: <Trophy size={12} color="#A9B4C0" /> },
+    { key: "rewards", label: "Ödüller", icon: <Gift size={12} color="#A9B4C0" />, badge: true },
+    { key: "store", label: "Dükkan", icon: <ShoppingCart size={12} color="#A9B4C0" /> },
+  ];
 
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-        customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
+        provider={PROVIDER_GOOGLE}
+        customMapStyle={darkMapStyle}
         initialRegion={region}
         showsCompass={false}
         showsScale={false}
@@ -262,189 +246,226 @@ export default function ActiveGameScreen() {
           <Polygon
             key={t.id}
             coordinates={t.polygon}
-            strokeColor="rgba(0, 229, 204, 0.40)"
+            strokeColor="rgba(0, 232, 255, 0.4)"
             strokeWidth={2}
-            fillColor={t.color ?? "rgba(0, 229, 204, 0.14)"}
+            fillColor={t.color ?? "rgba(0, 232, 255, 0.12)"}
           />
         ))}
 
-        {trail.length >= 2 && (
-          <>
-            <Polyline
-              coordinates={trail}
-              strokeColor="rgba(0, 229, 204, 0.24)"
-              strokeWidth={8}
-              lineDashPattern={closed ? undefined : [9, 4]}
-            />
-            <Polyline
-              coordinates={trail}
-              strokeColor={theme.colors.primaryCyan}
-              strokeWidth={5}
-              lineDashPattern={closed ? undefined : [9, 4]}
-            />
-          </>
-        )}
+        {fakeZones.map((z) => (
+          <Polygon key={z.id} coordinates={z.nodes} strokeColor={z.stroke} fillColor={z.fill} strokeWidth={1} />
+        ))}
 
-        {trailNodes.map((point, idx) => (
-          <Marker key={`trail-node-${idx}`} coordinate={point} anchor={{ x: 0.5, y: 0.5 }}>
+        {fakeZones.map((z) => (
+          <Marker key={`${z.id}-mark`} coordinate={z.marker} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.zoneMark}>
+              <Crown size={12} color="#C1D1F5" />
+            </View>
+          </Marker>
+        ))}
+
+        {trail.length >= 2 ? (
+          <>
+            <Polyline coordinates={trail} strokeColor="rgba(0, 232, 255, 0.28)" strokeWidth={9} />
+            <Polyline coordinates={trail} strokeColor="#7AF2FF" strokeWidth={4.4} />
+          </>
+        ) : null}
+
+        {routeNodes.map((p, i) => (
+          <Marker key={`node-${i}`} coordinate={p} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={styles.routeNode} />
           </Marker>
         ))}
 
-        {closed && trail.length >= 3 && (
-          <Polygon
-            coordinates={trail}
-            strokeColor={theme.colors.primaryCyan}
-            strokeWidth={3}
-            fillColor="rgba(0, 229, 204, 0.26)"
-          />
-        )}
-
-        {startPoint.current && !closed && trail.length >= 3 && (
+        {startPoint.current ? (
           <>
             <Circle
               center={startPoint.current}
               radius={CLOSE_DISTANCE_THRESHOLD}
-              strokeColor="rgba(0, 229, 204, 0.32)"
-              fillColor="rgba(0, 229, 204, 0.08)"
+              strokeColor="rgba(54, 240, 122, 0.42)"
+              fillColor="rgba(54, 240, 122, 0.11)"
               strokeWidth={1}
             />
             <Marker coordinate={startPoint.current} anchor={{ x: 0.5, y: 0.5 }}>
-              <View style={styles.startMarker} />
+              <View style={styles.startPinOuter}>
+                <View style={styles.startPinInner} />
+              </View>
             </Marker>
           </>
-        )}
+        ) : null}
 
-        {currentPos && (
-          <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.playerMarkerContainer}>
-              <Animated.View style={[styles.playerPulse, { transform: [{ scale: pulseAnim }], opacity: pulseOpacity }]} />
-              <View style={styles.playerDot} />
+        {trail.length > 1 ? (
+          <Marker coordinate={trail[trail.length - 1]} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.finishPin}>
+              <Text style={styles.finishPinText}>#</Text>
             </View>
           </Marker>
-        )}
+        ) : null}
       </MapView>
 
-      <SafeTop insetsTop={insets.top}>
-        <View style={styles.headerRow}>
-          <Pressable style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]} onPress={handleClose}>
-            <X size={16} color={theme.colors.textPrimary} />
+      <SafeAreaView style={styles.topWrap} edges={["top"]}>
+        <View style={styles.topHudRow}>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatarCore}>
+              <Text style={styles.avatarText}>AL</Text>
+            </View>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelText}>19</Text>
+            </View>
+          </View>
+
+          <View style={styles.balancePill}>
+            <View style={styles.coinDot} />
+            <Text style={styles.balanceText}>133.141</Text>
+            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
+          </View>
+
+          <View style={styles.balancePill}>
+            <Gem size={20} color="#7F9CFF" fill="#7F9CFF" />
+            <Text style={styles.balanceText}>38</Text>
+            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
+          </View>
+
+          <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
+            <Bell size={25} color="#FFFFFF" />
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>3</Text>
+            </View>
           </Pressable>
-          <View style={styles.livePill}>
-            <View style={[styles.liveDot, closed ? styles.liveDotClosed : styles.liveDotActive]} />
-            <Text style={styles.livePillText}>{closed ? "Tamamlandı" : "Aktif Koşu"}</Text>
-          </View>
         </View>
 
-        <TopModeSwitcher options={RUN_MODE_OPTIONS} value={activeMode} onChange={setActiveMode} />
+        <View style={styles.statsScaleWrap}>
+          <View style={styles.statsCard}>
+          <View style={styles.statCol}>
+            <Text style={styles.statTitle}>Süre</Text>
+            <View style={styles.statRow}>
+              <Timer size={14} color="#E6EAF0" />
+              <Text style={styles.statValue}>{formatClock(elapsed)}</Text>
+            </View>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statTitle}>Mesafe</Text>
+            <View style={styles.statRow}>
+              <Map size={14} color="#00E8FF" />
+              <Text style={styles.statValue}>{distKm} km</Text>
+            </View>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statTitle}>Alan</Text>
+            <View style={styles.statRow}>
+              <Square size={14} color="#36F07A" />
+              <Text style={styles.statValue}>{areaM2.toLocaleString("tr-TR")} m²</Text>
+            </View>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statTitle}>Adım</Text>
+            <View style={styles.statRow}>
+              <Footprints size={14} color="#FFB83A" />
+              <Text style={styles.statValue}>{stepCount.toLocaleString("tr-TR")}</Text>
+            </View>
+          </View>
+          </View>
+        </View>
+      </SafeAreaView>
 
-        <GlassCard style={styles.metricsCard} contentStyle={styles.metricsContent}>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricTitle}>Süre</Text>
-            <AnimatedMetricValue value={formatTime(elapsed)} />
+      <View
+        style={[
+          styles.leftPanels,
+          {
+            top: insets.top + 260 * contentScale,
+            transform: [{ scale: contentScale }],
+          },
+        ]}
+      >
+        <View style={styles.questCard}>
+          <Text style={styles.questTitle}>AKTİF GÖREV</Text>
+          <Text style={styles.questLine}>5.000 m² fethet</Text>
+          <Text style={styles.questLine}>{Math.min(areaM2, 5000).toLocaleString("tr-TR")} / 5.000</Text>
+          <View style={styles.questRewardRow}>
+            <Gem size={24} color="#9D4DFF" fill="#9D4DFF" />
+            <Text style={styles.questReward}>25</Text>
           </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricItem}>
-            <Text style={styles.metricTitle}>Mesafe</Text>
-            <AnimatedMetricValue value={`${distKm} km`} />
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricItem}>
-            <Text style={styles.metricTitle}>Alan</Text>
-            <AnimatedMetricValue value={`${areaKm2} km²`} />
-          </View>
-        </GlassCard>
-      </SafeTop>
+          <Text style={styles.questMuted}>Ödül</Text>
+          <Pressable style={styles.questBtn} onPress={() => router.push(ROUTES.mysteryBox)}>
+            <Text style={styles.questBtnText}>Görevi Gör</Text>
+          </Pressable>
+        </View>
 
-      <View style={[styles.rightPowerPanel, compactHeight && styles.rightPowerPanelCompact]}>
-        <GlassCard contentStyle={styles.powerCardContent}>
-          <View style={styles.powerRow}>
-            <Shield size={14} color={theme.colors.primaryCyan} />
-            <Text style={styles.powerLabel}>Kalkan</Text>
+        <View style={styles.streakCard}>
+          <Text style={styles.streakTitle}>GÜNLÜK SERİ</Text>
+          <Text style={styles.streakFlame}>🔥</Text>
+          <Text style={styles.streakNumber}>7</Text>
+          <Text style={styles.streakMuted}>Gün</Text>
+          <Text style={styles.chest}>🎁</Text>
+          <Text style={styles.streakMuted}>Yarınki Ödül</Text>
+          <View style={styles.streakGemRow}>
+            <Gem size={12} color="#9D4DFF" fill="#9D4DFF" />
+            <Text style={styles.streakGemText}>10</Text>
           </View>
-          <Text style={styles.powerValue}>{formatTime(shieldSeconds)}</Text>
-        </GlassCard>
-        <ActionCircleButton
-          icon={<Radar size={16} color={theme.colors.primaryCyan} />}
-          label="Radar"
-          compact={narrow}
-          onPress={() => mapRef.current?.animateToRegion({ ...region, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 400)}
-        />
+        </View>
       </View>
 
-      {speedViolation && !closed && (
-        <View style={styles.warningBadge}>
-          <Text style={styles.warningText}>Hız limiti aşıldı: {SPEED_LIMIT_KMH} km/s</Text>
+      {speedViolation ? (
+        <View style={[styles.warningPill, { transform: [{ scale: contentScale }] }]}>
+          <Text style={styles.warningText}>Hız limiti aşıldı ({SPEED_LIMIT_KMH} km/s)</Text>
         </View>
-      )}
+      ) : null}
 
-      {hiddenRewardSignal && (
-        <ShimmerBadge style={[styles.rewardSignal, { bottom: getBottomCtaPadding(insets.bottom, compactHeight ? 154 : 182) }]} shimmerColor="rgba(255, 200, 87, 0.38)">
-          <Text style={styles.rewardSignalText}>Gizli ödül sinyali güçleniyor</Text>
-        </ShimmerBadge>
-      )}
+      <View
+        style={[
+          styles.bottomControls,
+          {
+            bottom: insets.bottom + 130 * contentScale + 12,
+            transform: [{ scale: controlsScale }],
+          },
+        ]}
+      >
+        <View style={styles.bottomControlsInner}>
+          <Pressable style={styles.ctrlButton} onPress={handlePause}>
+            <View style={styles.ctrlCircle}>
+              <Pause size={26} color="#E6EAF0" />
+            </View>
+            <Text style={styles.ctrlLabel}>Duraklat</Text>
+          </Pressable>
 
-      <View style={[styles.bottomOverlay, { paddingBottom: getBottomCtaPadding(insets.bottom, 8) }]}>
-        <View style={[styles.bottomActionsRow, narrow && styles.bottomActionsRowCompact]}>
-          <ActionCircleButton icon={<Pause size={16} color={theme.colors.textPrimary} />} label="Duraklat" compact={narrow} onPress={handleClose} />
-          <GlowPulseView duration={600} minOpacity={0.88} maxOpacity={1} minScale={1} maxScale={1.035}>
-            <Animated.View
-              style={{
-                transform: [
-                  {
-                    scale: finishPulse.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 1.04],
-                    }),
-                  },
-                ],
-              }}
-            >
-              <Pressable style={({ pressed }) => [styles.finishButton, narrow && styles.finishButtonCompact, pressed && styles.pressed]} onPress={handleCapture}>
-                <Text style={styles.finishTitle}>{closed ? "Sonucu Aç" : "Bitir & Kapat"}</Text>
-                <Text style={styles.finishSubtitle}>
-                  {closed
-                    ? "Koşuyu tamamladın"
-                    : nearStart
-                      ? "Çember kapatmaya hazır"
-                      : canClose
-                        ? "Döngüyü tamamla"
-                        : "En az 10 rota noktası gerekli"}
-                </Text>
-              </Pressable>
-            </Animated.View>
-          </GlowPulseView>
-          <ActionCircleButton icon={<Flag size={16} color={theme.colors.goldReward} />} label="Tur Bitir" compact={narrow} onPress={handleCapture} />
+          <Pressable style={styles.ctrlCenterWrap} onPress={handleFinish}>
+            <View style={styles.ctrlCenterCircleOuter}>
+              <View style={styles.ctrlCenterCircleInner}>
+                <Square size={24} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            </View>
+            <Text style={styles.ctrlLabelCenter}>{closed ? "Sonucu Aç" : "Bitir & Kaydet"}</Text>
+          </Pressable>
+
+          <Pressable style={styles.ctrlButton} onPress={handleFinish}>
+            <View style={styles.ctrlCircle}>
+              <Flag size={26} color="#E6EAF0" />
+            </View>
+            <Text style={styles.ctrlLabel}>Tur Bitir</Text>
+          </Pressable>
         </View>
-
-        <View style={styles.gpsStatusRow}>
-          <Timer size={13} color={theme.colors.success} />
-          <Text style={styles.gpsStatusText}>GPS güçlü / aktif</Text>
-          <Animated.View
-            style={[
-              styles.gpsDot,
-              {
-                opacity: gpsPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }),
-                transform: [
-                  {
-                    scale: gpsPulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.3] }),
-                  },
-                ],
-              },
-            ]}
-          />
-          <Text style={styles.gpsSpeedText}>{Math.max(0, speed * 3.6).toFixed(1)} km/s</Text>
-        </View>
-
-        <NeonButton
-          label="Çizgiyi Kapat"
-          size="sm"
-          variant="ghost"
-          fullWidth
-          onPress={handleCapture}
-          disabled={!canClose && !closed}
-        />
       </View>
+
+      <BottomTabBar<BottomKey>
+        tabs={bottomTabs}
+        activeKey="map"
+        style={styles.bottomTabOffset}
+        onTabPress={(key) => {
+          if (key === "map") router.replace(ROUTES.tabs.map);
+          if (key === "leaderboard") router.replace(ROUTES.tabs.leaderboard);
+          if (key === "rewards") router.push(ROUTES.mysteryBox);
+          if (key === "store") router.replace(ROUTES.tabs.store);
+        }}
+      />
+
+      {nearStart && !closed ? (
+        <View style={[styles.nearStartBadge, { bottom: 236 * contentScale, transform: [{ scale: contentScale }] }]}>
+          <Text style={styles.nearStartText}>Başlangıç noktasına yaklaştın, turu kapatabilirsin</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -452,283 +473,416 @@ export default function ActiveGameScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.backgroundDeep,
+    backgroundColor: "#0A0F14",
   },
-  topOverlay: {
+  topWrap: {
     position: "absolute",
-    left: theme.spacing.md,
-    right: theme.spacing.md,
-    gap: theme.spacing.sm,
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 6,
+    gap: 10,
+    zIndex: 5,
   },
-  headerRow: {
+  topHudRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 1,
   },
-  iconPill: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.md,
+  statsScaleWrap: {
+    width: "100%",
+  },
+  avatarWrap: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    borderWidth: 1.5,
+    borderColor: "rgba(16, 244, 232, 0.85)",
+    backgroundColor: "rgba(8, 18, 28, 0.65)",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.colors.surfaceCard,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
+    shadowColor: "#10F4E8",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.42,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  livePill: {
-    flexDirection: "row",
+  avatarCore: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     alignItems: "center",
-    gap: 6,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.surfaceCard,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
+    justifyContent: "center",
   },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  liveDotActive: {
-    backgroundColor: theme.colors.danger,
-  },
-  liveDotClosed: {
-    backgroundColor: theme.colors.success,
-  },
-  livePillText: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: theme.typography.size.xs,
-  },
-  metricsCard: {
-    borderRadius: theme.radius.lg,
-  },
-  metricsContent: {
-    flexDirection: "row",
-    alignItems: "stretch",
-  },
-  metricItem: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: theme.spacing.sm,
-  },
-  metricTitle: {
-    color: theme.colors.textMuted,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.size.xs,
-    marginBottom: 4,
-  },
-  metricNumber: {
-    color: theme.colors.textPrimary,
+  avatarText: {
+    color: "#FFFFFF",
     fontFamily: theme.typography.fontFamily.bold,
-    fontSize: theme.typography.size.lg,
+    fontSize: 19,
   },
-  metricDivider: {
-    width: 1,
-    marginVertical: 8,
-    backgroundColor: theme.colors.borderSubtle,
-  },
-  routeNode: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: theme.colors.primaryCyan,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.45)",
-  },
-  startMarker: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: theme.colors.primaryCyan,
-    borderWidth: 3,
-    borderColor: theme.colors.backgroundDeep,
-  },
-  playerMarkerContainer: {
-    width: 60,
-    height: 60,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  playerPulse: {
+  levelBadge: {
     position: "absolute",
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.colors.primaryCyan,
+    right: -6,
+    bottom: -5,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 11,
+    backgroundColor: "rgba(8, 18, 28, 0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.42)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
   },
-  playerDot: {
+  levelText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
+  },
+  balancePill: {
+    width: 109,
+    height: 42,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  coinDot: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: theme.colors.primaryCyan,
-    borderWidth: 3,
-    borderColor: theme.colors.backgroundDeep,
-  },
-  rightPowerPanel: {
-    position: "absolute",
-    right: theme.spacing.md,
-    top: "36%",
-    width: 96,
-    gap: theme.spacing.xs,
-  },
-  rightPowerPanelCompact: {
-    top: "28%",
-  },
-  powerCardContent: {
-    gap: 4,
-    alignItems: "center",
-  },
-  powerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  powerLabel: {
-    color: theme.colors.textSecondary,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.size.xs,
-  },
-  powerValue: {
-    color: theme.colors.primaryCyan,
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: theme.typography.size.base,
-  },
-  actionCircle: {
-    width: 96,
-    minHeight: 54,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surfaceCard,
+    backgroundColor: "#FFC83D",
     borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
+    borderColor: "#FFE08E",
+  },
+  balanceText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 16,
+  },
+  bellButton: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
   },
-  actionCircleCompact: {
-    width: 56,
-    minHeight: 48,
-    borderRadius: theme.radius.sm,
-  },
-  actionCircleIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "rgba(0, 229, 204, 0.1)",
+  bellBadge: {
+    position: "absolute",
+    right: -4,
+    top: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#10F4E8",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 3,
+    paddingHorizontal: 4,
   },
-  actionCircleText: {
-    color: theme.colors.textSecondary,
+  bellBadgeText: {
+    color: "#043038",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 12,
+  },
+  statsCard: {
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(17, 24, 33, 0.92)",
+    flexDirection: "row",
+    alignItems: "stretch",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  statCol: {
+    flex: 1,
+    gap: 4,
+  },
+  statTitle: {
+    color: "#8893A6",
     fontFamily: theme.typography.fontFamily.medium,
     fontSize: 11,
   },
-  warningBadge: {
-    position: "absolute",
-    top: "31%",
-    alignSelf: "center",
-    backgroundColor: "rgba(255, 77, 77, 0.20)",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: "rgba(255, 77, 77, 0.55)",
-  },
-  warningText: {
-    color: theme.colors.danger,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: theme.typography.size.sm,
-  },
-  rewardSignal: {
-    position: "absolute",
-    alignSelf: "center",
-    backgroundColor: "rgba(255, 200, 87, 0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 200, 87, 0.46)",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: theme.radius.full,
-  },
-  rewardSignalText: {
-    color: theme.colors.goldReward,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: theme.typography.size.xs,
-  },
-  bottomOverlay: {
-    position: "absolute",
-    left: theme.spacing.md,
-    right: theme.spacing.md,
-    bottom: 0,
-    gap: theme.spacing.sm,
-  },
-  bottomActionsRow: {
+  statRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing.sm,
+    gap: 4,
   },
-  bottomActionsRowCompact: {
-    gap: theme.spacing.xs,
-  },
-  finishButton: {
-    flex: 1,
-    minHeight: 64,
-    borderRadius: theme.radius.lg,
-    backgroundColor: "rgba(255, 77, 77, 0.88)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 138, 138, 0.75)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.sm,
-  },
-  finishButtonCompact: {
-    minHeight: 58,
-    paddingHorizontal: theme.spacing.xs,
-  },
-  finishTitle: {
-    color: theme.colors.textPrimary,
+  statValue: {
+    color: "#E6EAF0",
     fontFamily: theme.typography.fontFamily.bold,
-    fontSize: theme.typography.size.base,
+    fontSize: 14,
   },
-  finishSubtitle: {
-    marginTop: 2,
-    color: "rgba(255,255,255,0.85)",
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.size.xs,
+  statDivider: {
+    width: 1,
+    marginHorizontal: 8,
+    backgroundColor: "rgba(120, 160, 180, 0.22)",
   },
-  gpsStatusRow: {
-    alignSelf: "center",
+  leftPanels: {
+    position: "absolute",
+    left: -19,
+    gap: 14,
+    zIndex: 4,
+  },
+  questCard: {
+    width: 126,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(54, 240, 122, 0.66)",
+    backgroundColor: "rgba(17, 24, 33, 0.92)",
+    padding: 12,
+    gap: 7,
+  },
+  questTitle: {
+    color: "#36F07A",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 14,
+  },
+  questLine: {
+    color: "#E6EAF0",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 13,
+  },
+  questRewardRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    backgroundColor: theme.colors.surfaceCard,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    marginTop: 4,
   },
-  gpsStatusText: {
-    color: theme.colors.success,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: theme.typography.size.xs,
+  questReward: {
+    color: "#E6EAF0",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 36,
   },
-  gpsDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.colors.textMuted,
-  },
-  gpsSpeedText: {
-    color: theme.colors.textMuted,
+  questMuted: {
+    color: "#8893A6",
     fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.size.xs,
+    fontSize: 13,
   },
-  pressed: {
-    opacity: 0.86,
+  questBtn: {
+    marginTop: 2,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 232, 255, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 232, 255, 0.45)",
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  questBtnText: {
+    color: "#6CEFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 19,
+  },
+  streakCard: {
+    width: 126,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255, 184, 58, 0.62)",
+    backgroundColor: "rgba(17, 24, 33, 0.92)",
+    padding: 12,
+    gap: 4,
+    alignItems: "center",
+  },
+  streakTitle: {
+    color: "#FFB83A",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 13,
+  },
+  streakFlame: {
+    fontSize: 22,
+  },
+  streakNumber: {
+    color: "#FFB83A",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 48,
+    lineHeight: 50,
+  },
+  streakMuted: {
+    color: "#8893A6",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 14,
+  },
+  chest: {
+    marginTop: 2,
+    fontSize: 42,
+  },
+  streakGemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  streakGemText: {
+    color: "#DDA3FF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 14,
+  },
+  zoneMark: {
+    width: 20,
+    height: 20,
+    borderRadius: 8,
+    backgroundColor: "rgba(10, 15, 22, 0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(180, 195, 223, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  routeNode: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#7AF2FF",
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.55)",
+    shadowColor: "#00E8FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  startPinOuter: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: "#36F07A",
+    backgroundColor: "rgba(54, 240, 122, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  startPinInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#F2FFF7",
+  },
+  finishPin: {
+    width: 30,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#F2F4F8",
+    borderWidth: 1,
+    borderColor: "#B5BAC5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  finishPinText: {
+    color: "#111821",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 20,
+  },
+  warningPill: {
+    position: "absolute",
+    alignSelf: "center",
+    top: "36%",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255, 59, 48, 0.58)",
+    backgroundColor: "rgba(255, 59, 48, 0.2)",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    zIndex: 6,
+  },
+  warningText: {
+    color: "#FF5D5D",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  nearStartBadge: {
+    position: "absolute",
+    alignSelf: "center",
+    bottom: 236,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(54, 240, 122, 0.42)",
+    backgroundColor: "rgba(54, 240, 122, 0.14)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  nearStartText: {
+    color: "#95FFC3",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  bottomControls: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 6,
+  },
+  bottomControlsInner: {
+    width: "100%",
+    maxWidth: 430,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "flex-end",
+    gap: 16,
+  },
+  bottomTabOffset: {
+    bottom: -16,
+  },
+  ctrlButton: {
+    width: 132,
+    alignItems: "center",
+    gap: 8,
+  },
+  ctrlCircle: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.38)",
+    backgroundColor: "rgba(17, 24, 33, 0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctrlLabel: {
+    color: "#E6EAF0",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 15,
+  },
+  ctrlCenterWrap: {
+    width: 176,
+    alignItems: "center",
+    gap: 8,
+  },
+  ctrlCenterCircleOuter: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: "rgba(255, 51, 48, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 51, 48, 0.62)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#FF3330",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  ctrlCenterCircleInner: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "#FF3330",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctrlLabelCenter: {
+    color: "#E6EAF0",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 17,
   },
 });
-

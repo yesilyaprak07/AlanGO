@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import { View, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Map, ShoppingBag, Bell, User, Target } from "lucide-react-native";
+import { Map, ShoppingBag, Trophy, Gift } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
 
 function TabIcon({ Icon, focused, label }: { Icon: typeof Map; focused: boolean; label: string }) {
@@ -46,37 +46,34 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: "Liderlik",
+          tabBarStyle: { display: "none" },
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Trophy} focused={focused} label="Liderlik" />,
+        }}
+      />
+      <Tabs.Screen
         name="missions"
         options={{
-          title: "Görev",
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Target} focused={focused} label="Görev" />,
+          title: "Ödüller",
+          tabBarStyle: { display: "none" },
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Gift} focused={focused} label="Ödüller" />,
         }}
       />
       <Tabs.Screen
         name="store"
         options={{
-          title: "Mağaza",
-          tabBarIcon: ({ focused }) => <TabIcon Icon={ShoppingBag} focused={focused} label="Mağaza" />,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: "Olay",
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Bell} focused={focused} label="Olay" />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profil",
-          tabBarIcon: ({ focused }) => <TabIcon Icon={User} focused={focused} label="Profil" />,
+          title: "Dükkan",
+          tabBarStyle: { display: "none" },
+          tabBarIcon: ({ focused }) => <TabIcon Icon={ShoppingBag} focused={focused} label="Dükkan" />,
         }}
       />
       <Tabs.Screen name="settings" options={{ href: null }} />
-      <Tabs.Screen name="leaderboard" options={{ href: null }} />
       <Tabs.Screen name="discover" options={{ href: null }} />
       <Tabs.Screen name="feed" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }

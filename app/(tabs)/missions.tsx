@@ -1,278 +1,596 @@
-﻿import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useMemo } from "react";
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Bell, Gift, Map as MapIcon, ShoppingBag, Target, Trophy, User } from "lucide-react-native";
 import {
-  BottomTabBar,
-  GlassCard,
-  HelperText,
-  MissionCard,
-  NeonButton,
-  ProgressBar,
-  SoonBadge,
-  StatCard,
-} from "@/components/ui";
-import { AmbientGlow } from "@/components/fx";
-import { theme } from "@/constants/theme";
+  BadgeCheck,
+  Bell,
+  CircleHelp,
+  Clock3,
+  Gem,
+  Gift,
+  Headphones,
+  Map,
+  Plus,
+  Sandwich,
+  ShieldCheck,
+  ShoppingCart,
+  SquarePlus,
+  Ticket,
+  Trophy,
+  Users,
+  Watch,
+} from "lucide-react-native";
+import { BottomTabBar } from "@/components/ui";
 import { ROUTES } from "@/constants/routes";
-import { getTabContentBottomSpace, isNarrowWidth } from "@/constants/safeArea";
+import { theme } from "@/constants/theme";
 
-type BottomKey = "map" | "missions" | "feed" | "notifications" | "profile";
+type BottomKey = "map" | "leaderboard" | "rewards" | "store";
 
-type MissionItem = {
+type Chest = {
   id: string;
   title: string;
-  total: number;
-  progress: number;
-  xp: number;
-  coin: number;
-  box: number;
-  tone?: "cyan" | "gold";
+  timer: string;
+  cost: number;
+  tone: "normal" | "rare" | "epic" | "legendary";
 };
 
-const DAILY_BASE: MissionItem[] = [
-  { id: "d1", title: "3 alan fethet", total: 3, progress: 1, xp: 180, coin: 90, box: 1, tone: "cyan" },
-  { id: "d2", title: "2 km yuru", total: 2, progress: 1, xp: 130, coin: 60, box: 0, tone: "cyan" },
-  { id: "d3", title: "1 rakip alani ele gecir", total: 1, progress: 0, xp: 220, coin: 120, box: 1, tone: "gold" },
+type RealReward = {
+  id: string;
+  title: string;
+  chance: string;
+  icon: React.ReactNode;
+};
+
+const CHESTS: Chest[] = [
+  { id: "normal", title: "Normal Sandik", timer: "02:15", cost: 12, tone: "normal" },
+  { id: "rare", title: "Rare Sandik", timer: "22:30", cost: 28, tone: "rare" },
+  { id: "epic", title: "Epic Sandik", timer: "02:45:15", cost: 72, tone: "epic" },
+  { id: "legendary", title: "Legendary Sandik", timer: "07:59:40", cost: 120, tone: "legendary" },
 ];
 
-const WEEKLY_BASE: MissionItem[] = [
-  { id: "w1", title: "15 km tamamla", total: 15, progress: 7, xp: 450, coin: 260, box: 1, tone: "cyan" },
-  { id: "w2", title: "10 bolge fethet", total: 10, progress: 4, xp: 520, coin: 330, box: 2, tone: "gold" },
-  { id: "w3", title: "3 gun ust uste giris yap", total: 3, progress: 2, xp: 280, coin: 150, box: 1, tone: "cyan" },
+const REAL_REWARDS: RealReward[] = [
+  { id: "coffee", title: "Kahve", chance: "%25", icon: <Gift size={34} color="#F3D4B6" /> },
+  { id: "meal", title: "Yemek", chance: "%25", icon: <Sandwich size={34} color="#F1CB86" /> },
+  { id: "coupon", title: "Magaza Kuponu", chance: "%20", icon: <Ticket size={34} color="#E8D8B2" /> },
+  { id: "earbuds", title: "Kulaklik", chance: "%15", icon: <Headphones size={34} color="#D9E5F4" /> },
+  { id: "watch", title: "Saat", chance: "%10", icon: <Watch size={34} color="#D1D8E4" /> },
 ];
 
-export default function MissionsScreen() {
+function chestTone(tone: Chest["tone"]) {
+  if (tone === "rare") {
+    return { border: "rgba(132, 114, 255, 0.65)", glow: "rgba(132, 114, 255, 0.16)", text: "#BAA6FF" };
+  }
+  if (tone === "epic") {
+    return { border: "rgba(197, 135, 255, 0.65)", glow: "rgba(197, 135, 255, 0.16)", text: "#D9A8FF" };
+  }
+  if (tone === "legendary") {
+    return { border: "rgba(255, 200, 90, 0.7)", glow: "rgba(255, 200, 90, 0.17)", text: "#FFD988" };
+  }
+  return { border: "rgba(120, 160, 180, 0.35)", glow: "rgba(120, 160, 180, 0.12)", text: "#C7D3DF" };
+}
+
+export default function RewardsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const narrow = isNarrowWidth(width);
-  const [dailyMissions, setDailyMissions] = useState(DAILY_BASE);
-  const [weeklyMissions, setWeeklyMissions] = useState(WEEKLY_BASE);
 
-  const totalDailyProgress = useMemo(() => {
-    const total = dailyMissions.reduce((acc, item) => acc + item.total, 0);
-    const current = dailyMissions.reduce((acc, item) => acc + Math.min(item.progress, item.total), 0);
-    return total > 0 ? (current / total) * 100 : 0;
-  }, [dailyMissions]);
-
-  const dailyRewards = useMemo(() => {
-    return dailyMissions.reduce(
-      (acc, item) => {
-        acc.xp += item.xp;
-        acc.coin += item.coin;
-        acc.box += item.box;
-        return acc;
-      },
-      { xp: 0, coin: 0, box: 0 }
-    );
-  }, [dailyMissions]);
-
-  const progressMission = (targetId: string, group: "daily" | "weekly") => {
-    const updater = (items: MissionItem[]) =>
-      items.map((item) =>
-        item.id === targetId ? { ...item, progress: Math.min(item.total, item.progress + 1) } : item
-      );
-
-    if (group === "daily") {
-      setDailyMissions((prev) => updater(prev));
-    } else {
-      setWeeklyMissions((prev) => updater(prev));
-    }
-  };
-
-  const bottomTabs = [
-    { key: "map" as const, label: "Harita", icon: <MapIcon size={16} color={theme.colors.textMuted} /> },
-    { key: "missions" as const, label: "Gorev", icon: <Target size={16} color={theme.colors.primaryCyan} /> },
-    { key: "feed" as const, label: "Feed", icon: <ShoppingBag size={16} color={theme.colors.textMuted} /> },
-    { key: "notifications" as const, label: "Bildirim", icon: <Bell size={16} color={theme.colors.textMuted} /> },
-    { key: "profile" as const, label: "Profil", icon: <User size={16} color={theme.colors.textMuted} /> },
-  ];
+  const bottomTabs = useMemo(
+    () => [
+      { key: "map" as const, label: "Harita", icon: <Map size={12} color="#A9B4C0" /> },
+      { key: "leaderboard" as const, label: "Liderlik", icon: <Trophy size={12} color="#A9B4C0" /> },
+      { key: "rewards" as const, label: "Oduller", icon: <Gift size={12} color="#10F4E8" />, badgeCount: 1 },
+      { key: "store" as const, label: "Dukkan", icon: <ShoppingCart size={12} color="#A9B4C0" /> },
+    ],
+    []
+  );
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <AmbientGlow cyanOpacity={0.04} purpleOpacity={0.03} />
+    <ImageBackground source={require("../../assets/images/backbos.png")} style={styles.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 126 }]} showsVerticalScrollIndicator={false}>
+          <View style={styles.topHudRow}>
+            <Pressable style={styles.avatarWrap} onPress={() => router.push(ROUTES.tabs.profile)}>
+              <View style={styles.avatarCore}>
+                <Text style={styles.avatarText}>AL</Text>
+              </View>
+              <View style={styles.levelChip}>
+                <Text style={styles.levelText}>24</Text>
+              </View>
+            </Pressable>
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: getTabContentBottomSpace(insets.bottom, 30) }]}
-        showsVerticalScrollIndicator={false}
-        decelerationRate="fast"
-      >
-        <View style={styles.headerWrap}>
-          <Text style={styles.title}>Gorevler</Text>
-          <HelperText text="Bugunku hedeflerini tamamla, XP ve coin kazan." />
-        </View>
+            <View style={styles.balancePill}>
+              <View style={styles.coinIcon} />
+              <Text style={styles.balanceText}>2.450</Text>
+              <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
+            </View>
 
-        <View style={[styles.statRow, narrow && styles.statRowWrap]}>
-          <StatCard title="Gunluk XP" value={dailyRewards.xp} subtitle="Toplam" icon="XP" style={[styles.statItem, narrow && styles.statItemNarrow]} />
-          <StatCard title="Coin" value={dailyRewards.coin} subtitle="Toplam" icon="C" style={[styles.statItem, narrow && styles.statItemNarrow]} />
-        </View>
+            <View style={styles.balancePill}>
+              <Gem size={20} color="#7F9CFF" fill="#7F9CFF" />
+              <Text style={styles.balanceText}>128</Text>
+              <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
+            </View>
 
-        <GlassCard contentStyle={styles.progressBlock}>
-          <View style={styles.progressHead}>
-            <Text style={styles.sectionTitle}>Gunluk Ilerleme</Text>
-            <SoonBadge label="MYSTERY +1" />
+            <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
+              <Bell size={25} color="#FFFFFF" />
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>3</Text>
+              </View>
+            </Pressable>
           </View>
-          <ProgressBar value={totalDailyProgress} />
-          <View style={styles.rewardMetaRow}>
-            <Text style={styles.rewardMetaText}>XP: +{dailyRewards.xp}</Text>
-            <Text style={styles.rewardMetaText}>Coin: +{dailyRewards.coin}</Text>
-            <Text style={styles.rewardMetaText}>Mystery Box: +{dailyRewards.box}</Text>
+
+          <Text style={styles.pageTitle}>ODULLER</Text>
+
+          <View style={styles.segmentedRow}>
+            <Pressable style={[styles.segmentBtn, styles.segmentBtnActive]}>
+              <Gift size={14} color="#6CEFFF" />
+              <Text style={[styles.segmentText, styles.segmentTextActive]}>Sandiklar</Text>
+            </Pressable>
+            <Pressable style={styles.segmentBtn}>
+              <ShieldCheck size={14} color="#8B98A8" />
+              <Text style={styles.segmentText}>Gunluk Gorevler</Text>
+            </Pressable>
+            <Pressable style={styles.segmentBtn}>
+              <BadgeCheck size={14} color="#8B98A8" />
+              <Text style={styles.segmentText}>Basarimlar</Text>
+            </Pressable>
           </View>
-        </GlassCard>
 
-        <View style={styles.sectionWrap}>
-          <Text style={styles.sectionTitle}>Gunluk Gorevler</Text>
-          {dailyMissions.map((mission) => (
-            <MissionCard
-              key={mission.id}
-              title={mission.title}
-              current={mission.progress}
-              total={mission.total}
-              xp={mission.xp}
-              coin={mission.coin}
-              mysteryBox={mission.box}
-              tone={mission.tone}
-              onProgressPress={() => progressMission(mission.id, "daily")}
-            />
-          ))}
-        </View>
-
-        <View style={styles.sectionWrap}>
-          <Text style={styles.sectionTitle}>Haftalik Gorevler</Text>
-          {weeklyMissions.map((mission) => (
-            <MissionCard
-              key={mission.id}
-              title={mission.title}
-              current={mission.progress}
-              total={mission.total}
-              xp={mission.xp}
-              coin={mission.coin}
-              mysteryBox={mission.box}
-              tone={mission.tone}
-              onProgressPress={() => progressMission(mission.id, "weekly")}
-            />
-          ))}
-        </View>
-
-        <GlassCard contentStyle={styles.ctaCardContent}>
-          <View style={styles.ctaTextWrap}>
-            <Trophy size={16} color={theme.colors.goldReward} />
-            <Text style={styles.ctaTitle}>Etkinlik ve Mystery Box firsatlarini kacirma</Text>
+          <View style={styles.chestsRow}>
+            {CHESTS.map((chest) => {
+              const tone = chestTone(chest.tone);
+              return (
+                <View key={chest.id} style={[styles.chestCard, { borderColor: tone.border, backgroundColor: tone.glow }]}>
+                  <Text style={styles.chestTitle}>{chest.title}</Text>
+                  <View style={[styles.chestArt, { borderColor: tone.border }]}>
+                    <Gift size={34} color={tone.text} />
+                  </View>
+                  <View style={styles.timerPill}>
+                    <Clock3 size={12} color="#66EFFF" />
+                    <Text style={styles.timerText}>{chest.timer}</Text>
+                  </View>
+                  <Pressable style={styles.openBtn}>
+                    <Text style={styles.openBtnText}>HEMEN AC</Text>
+                    <View style={styles.gemCostRow}>
+                      <Gem size={11} color="#7CEB73" fill="#7CEB73" />
+                      <Text style={styles.gemCostText}>{chest.cost}</Text>
+                    </View>
+                  </Pressable>
+                </View>
+              );
+            })}
           </View>
-          <View style={styles.ctaBtnsRow}>
-            <NeonButton label="Etkinlikler" size="sm" variant="ghost" onPress={() => router.push(ROUTES.events)} style={styles.ctaBtn} />
-            <NeonButton
-              label="Mystery Box"
-              size="sm"
-              variant="gold"
-              onPress={() => router.push(ROUTES.mysteryBox)}
-              style={styles.ctaBtn}
-              icon={<Gift size={14} color={theme.colors.goldReward} />}
-            />
+
+          <View style={styles.slotNotice}>
+            <View style={styles.slotNoticeLeft}>
+              <Gift size={18} color="#88D9FF" />
+              <Text style={styles.slotNoticeText}>Sandik slotu bekleme suresini ortadan kaldir. Ek slot acarak daha fazla sandigi ayni anda acabilirsin.</Text>
+            </View>
+            <Pressable style={styles.slotBtn}>
+              <SquarePlus size={14} color="#66F2FF" />
+              <View>
+                <Text style={styles.slotBtnTitle}>EK SLOT AC</Text>
+                <View style={styles.gemCostRow}>
+                  <Gem size={11} color="#7CEB73" fill="#7CEB73" />
+                  <Text style={styles.gemCostText}>250</Text>
+                </View>
+              </View>
+            </Pressable>
           </View>
-        </GlassCard>
 
-      </ScrollView>
+          <View style={styles.sectionHeadRow}>
+            <Text style={styles.sectionTitle}>SANDIK ICERIKLERI</Text>
+            <CircleHelp size={14} color="#7D8998" />
+          </View>
 
-      <BottomTabBar<BottomKey>
-        tabs={bottomTabs}
-        activeKey="missions"
-        onTabPress={(key) => {
-          if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "missions") return;
-          if (key === "feed") router.push(ROUTES.tabs.feed);
-          if (key === "notifications") router.push(ROUTES.tabs.notifications);
-          if (key === "profile") router.push(ROUTES.tabs.profile);
-        }}
-        style={styles.bottomTabs}
-      />
-    </SafeAreaView>
+          <View style={styles.contentsRow}>
+            {CHESTS.map((chest) => {
+              const tone = chestTone(chest.tone);
+              return (
+                <View key={`${chest.id}-content`} style={[styles.contentCard, { borderColor: tone.border }]}>
+                  <Text style={styles.contentCardTitle}>{chest.title}</Text>
+                  <Text style={[styles.contentCardSubtitle, { color: tone.text }]}>
+                    {chest.tone === "normal" ? "Yaygin" : chest.tone === "rare" ? "Nadir" : chest.tone === "epic" ? "Destansi" : "Efsanevi"}
+                  </Text>
+                  <View style={styles.contentChestIconWrap}>
+                    <Gift size={30} color={tone.text} />
+                  </View>
+                  <Text style={styles.contentLine}>Coin 200 - 20.000</Text>
+                  <Text style={styles.contentLine}>XP 50 - 3.000</Text>
+                  <Text style={styles.contentLine}>Gem %5 - %40</Text>
+                  <Text style={styles.contentLine}>Kart 1 - 10</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          <Text style={styles.smallInfoText}>Kesin oranlar sandik acilimi aninda belirlenir. Daha fazla bilgi icin dokunun.</Text>
+
+          <View style={styles.sectionHeadRow}>
+            <Text style={styles.sectionTitle}>GERCEK DUNYA ODULLERI</Text>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.realRewardsRow}>
+            {REAL_REWARDS.map((reward) => (
+              <View key={reward.id} style={styles.realRewardCard}>
+                <View style={styles.realRewardIconWrap}>{reward.icon}</View>
+                <Text style={styles.realRewardTitle}>{reward.title}</Text>
+                <Text style={styles.realRewardChance}>{reward.chance}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </ScrollView>
+
+        <BottomTabBar<BottomKey>
+          tabs={bottomTabs}
+          activeKey="rewards"
+          onTabPress={(key) => {
+            if (key === "map") router.push(ROUTES.tabs.map);
+            if (key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
+            if (key === "rewards") return;
+            if (key === "store") router.push(ROUTES.tabs.store);
+          }}
+        />
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.backgroundDeep,
+    backgroundColor: "rgba(2, 9, 16, 0.35)",
   },
   content: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
-    gap: theme.spacing.md,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    gap: 10,
   },
-  headerWrap: {
-    gap: 4,
-  },
-  title: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 28,
-  },
-  statRow: {
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-  },
-  statRowWrap: {
-    flexWrap: "wrap",
-  },
-  statItem: {
-    flex: 1,
-  },
-  statItemNarrow: {
-    minWidth: "100%",
-  },
-  progressBlock: {
-    gap: theme.spacing.xs,
-  },
-  progressHead: {
+  topHudRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing.xs,
+    gap: 10,
+    marginTop: 1,
   },
-  rewardMetaRow: {
+  avatarWrap: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    borderWidth: 1.5,
+    borderColor: "rgba(16, 244, 232, 0.85)",
+    backgroundColor: "rgba(8, 18, 28, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#10F4E8",
+    shadowOpacity: 0.42,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  avatarCore: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 19,
+  },
+  levelChip: {
+    position: "absolute",
+    right: -6,
+    bottom: -5,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 11,
+    backgroundColor: "rgba(8, 18, 28, 0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.42)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  levelText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
+  },
+  balancePill: {
+    width: 109,
+    height: 42,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
-  rewardMetaText: {
-    color: theme.colors.textSecondary,
+  coinIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FFC83D",
+    borderWidth: 1,
+    borderColor: "#FFE08E",
+  },
+  balanceText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 16,
+  },
+  bellButton: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellBadge: {
+    position: "absolute",
+    right: -4,
+    top: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#10F4E8",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    color: "#043038",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 12,
+  },
+  pageTitle: {
+    color: "#F4F7FB",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 43,
+    letterSpacing: 0.4,
+    marginTop: 4,
+  },
+  segmentedRow: {
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    padding: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  segmentBtnActive: {
+    borderWidth: 1,
+    borderColor: "rgba(16, 244, 232, 0.52)",
+    backgroundColor: "rgba(16, 244, 232, 0.12)",
+  },
+  segmentText: {
+    color: "#8B98A8",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 17,
+  },
+  segmentTextActive: {
+    color: "#6CEFFF",
+  },
+  chestsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 7,
+  },
+  chestCard: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 8,
+    gap: 7,
+  },
+  chestTitle: {
+    color: "#F2F6FB",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  chestArt: {
+    height: 84,
+    borderRadius: 11,
+    borderWidth: 1,
+    backgroundColor: "rgba(4, 11, 20, 0.84)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timerPill: {
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.8)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  timerText: {
+    color: "#C9D4E0",
     fontFamily: theme.typography.fontFamily.medium,
     fontSize: 11,
   },
-  sectionWrap: {
-    gap: theme.spacing.sm,
+  openBtn: {
+    height: 46,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(16, 244, 232, 0.42)",
+    backgroundColor: "rgba(16, 244, 232, 0.11)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
   },
-  sectionTitle: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: theme.typography.size.base,
+  openBtnText: {
+    color: "#6CEFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 11,
   },
-  ctaCardContent: {
-    gap: theme.spacing.sm,
-  },
-  ctaTextWrap: {
+  gemCostRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 4,
+  },
+  gemCostText: {
+    color: "#8EF38E",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 15,
+  },
+  slotNotice: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  slotNoticeLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 8,
   },
-  ctaTitle: {
+  slotNoticeText: {
     flex: 1,
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: theme.typography.size.sm,
+    color: "#B5C2D0",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 11,
+    lineHeight: 14,
   },
-  ctaBtnsRow: {
+  slotBtn: {
+    width: 96,
+    height: 54,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(16, 244, 232, 0.55)",
+    backgroundColor: "rgba(16, 244, 232, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
     flexDirection: "row",
-    gap: theme.spacing.sm,
   },
-  ctaBtn: {
+  slotBtnTitle: {
+    color: "#89F5FF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 10,
+  },
+  sectionHeadRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sectionTitle: {
+    color: "#ECF2F9",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 31,
+  },
+  contentsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 6,
+  },
+  contentCard: {
     flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: "rgba(8, 18, 28, 0.82)",
+    paddingVertical: 8,
+    paddingHorizontal: 7,
+    alignItems: "center",
+    gap: 2,
   },
-  bottomTabs: {
-    borderTopColor: theme.colors.borderSubtle,
+  contentCardTitle: {
+    color: "#F2F6FB",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 10,
+  },
+  contentCardSubtitle: {
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 10,
+    marginBottom: 3,
+  },
+  contentChestIconWrap: {
+    width: "100%",
+    height: 66,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(4, 11, 20, 0.84)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  contentLine: {
+    width: "100%",
+    color: "#B9C5D1",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 11,
+    lineHeight: 13,
+  },
+  smallInfoText: {
+    color: "#6F7C8B",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 10,
+    textAlign: "center",
+    marginTop: 2,
+  },
+  realRewardsRow: {
+    gap: 7,
+    paddingRight: 6,
+  },
+  realRewardCard: {
+    width: 110,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    gap: 4,
+  },
+  realRewardIconWrap: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  realRewardTitle: {
+    color: "#ECF2F9",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+    textAlign: "center",
+  },
+  realRewardChance: {
+    color: "#8FD6FF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
   },
 });
-

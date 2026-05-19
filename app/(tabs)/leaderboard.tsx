@@ -1,558 +1,601 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useMemo } from "react";
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Bell, Crown, Map as MapIcon, Shield, ShoppingBag, Target, User, Zap } from "lucide-react-native";
-import { BottomTabBar, GlassCard, IconBadge } from "@/components/ui";
-import { EmptyState } from "@/components/ui";
-import { theme } from "@/constants/theme";
-import { GlowPulseView } from "@/components/motion";
-import { useFadeIn } from "@/hooks/useFadeIn";
-import { AmbientGlow, AnimatedGradient, NeonOutline } from "@/components/fx";
+import {
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  Crown,
+  Gift,
+  Globe,
+  Map,
+  Shield,
+  ShoppingCart,
+  Trophy,
+  Users,
+  Building2,
+  Gem,
+  Plus,
+} from "lucide-react-native";
+import { BottomTabBar } from "@/components/ui";
 import { ROUTES } from "@/constants/routes";
-import { getTabContentBottomSpace, isNarrowWidth } from "@/constants/safeArea";
+import { theme } from "@/constants/theme";
 
-type FilterKey = "mahalle" | "sehir" | "turkiye" | "dunya";
-type BottomKey = "map" | "missions" | "feed" | "notifications" | "profile";
+type BottomKey = "map" | "leaderboard" | "rewards" | "store";
 
-type PodiumPlayer = {
-  rank: 1 | 2 | 3;
-  name: string;
-  level: number;
-  area: string;
-  weeklyXp: string;
-};
-
-type RankedPlayer = {
+type RankItem = {
   rank: number;
-  initials: string;
-  username: string;
+  name: string;
+  city: string;
+  area: string;
   level: number;
-  totalArea: string;
-  weeklyXp: string;
-  premium: boolean;
+  highlight?: boolean;
 };
 
-const FILTERS: Array<{ key: FilterKey; label: string }> = [
-  { key: "mahalle", label: "Mahalle" },
-  { key: "sehir", label: "�?ehir" },
-  { key: "turkiye", label: "Türkiye" },
-  { key: "dunya", label: "Dünya" },
+const ranking: RankItem[] = [
+  { rank: 4, name: "CNRman (Sen)", city: "Antalya", area: "72.540 m2", level: 19, highlight: true },
+  { rank: 5, name: "VioletStorm", city: "Bursa", area: "65.230 m2", level: 18 },
+  { rank: 6, name: "RoadRunner", city: "Konya", area: "61.080 m2", level: 18 },
+  { rank: 7, name: "MetroKing", city: "Adana", area: "58.310 m2", level: 17 },
+  { rank: 8, name: "SkyLine", city: "Gaziantep", area: "52.470 m2", level: 16 },
+  { rank: 9, name: "GreenArrow", city: "Samsun", area: "49.860 m2", level: 16 },
+  { rank: 10, name: "NightHawk", city: "Trabzon", area: "47.320 m2", level: 15 },
 ];
 
-const PODIUM: PodiumPlayer[] = [
-  { rank: 2, name: "ZehraT42", level: 29, area: "74.920 m²", weeklyXp: "+6.100 XP" },
-  { rank: 1, name: "MertKing", level: 34, area: "89.450 m²", weeklyXp: "+8.420 XP" },
-  { rank: 3, name: "Burak61", level: 27, area: "69.380 m²", weeklyXp: "+5.760 XP" },
-];
-
-const RANKING: RankedPlayer[] = [
-  { rank: 4, initials: "EO", username: "Eylul06", level: 25, totalArea: "62.940 m²", weeklyXp: "+4.800 XP", premium: true },
-  { rank: 5, initials: "KA", username: "KaanArena", level: 24, totalArea: "58.210 m²", weeklyXp: "+4.100 XP", premium: false },
-  { rank: 6, initials: "AD", username: "AdaDrift", level: 23, totalArea: "56.870 m²", weeklyXp: "+3.940 XP", premium: true },
-  { rank: 7, initials: "GP", username: "GPSMaster", level: 22, totalArea: "54.430 m²", weeklyXp: "+3.650 XP", premium: false },
-  { rank: 8, initials: "TK", username: "TurkKral", level: 21, totalArea: "52.210 m²", weeklyXp: "+3.410 XP", premium: true },
-  { rank: 9, initials: "AY", username: "Ays3", level: 21, totalArea: "50.930 m²", weeklyXp: "+3.120 XP", premium: false },
-  { rank: 10, initials: "RZ", username: "RizaRun", level: 20, totalArea: "49.870 m²", weeklyXp: "+2.980 XP", premium: false },
-];
-
-function podiumPalette(rank: 1 | 2 | 3) {
-  if (rank === 1) {
-    return {
-      tone: "gold" as const,
-      glow: "rgba(255, 200, 87, 0.20)",
-      border: "rgba(255, 200, 87, 0.45)",
-      text: theme.colors.goldReward,
-      badge: "#1",
-      colHeight: 122,
-    };
-  }
-
-  if (rank === 2) {
-    return {
-      tone: "neutral" as const,
-      glow: "rgba(185, 195, 208, 0.16)",
-      border: "rgba(185, 195, 208, 0.38)",
-      text: "#D5DEE8",
-      badge: "#2",
-      colHeight: 96,
-    };
-  }
-
-  return {
-    tone: "neutral" as const,
-    glow: "rgba(201, 122, 69, 0.16)",
-    border: "rgba(201, 122, 69, 0.42)",
-    text: "#C97A45",
-    badge: "#3",
-    colHeight: 84,
-  };
+function avatarColors(rank: number) {
+  if (rank === 4) return { ring: "#4DDCFF", fill: "rgba(77, 220, 255, 0.2)" };
+  if (rank % 3 === 0) return { ring: "#FFB83A", fill: "rgba(255, 184, 58, 0.2)" };
+  if (rank % 2 === 0) return { ring: "#A98BFF", fill: "rgba(169, 139, 255, 0.22)" };
+  return { ring: "#8EF3A1", fill: "rgba(142, 243, 161, 0.2)" };
 }
 
 export default function LeaderboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const narrow = isNarrowWidth(width);
-  const [activeFilter, setActiveFilter] = useState<FilterKey>("sehir");
-  const podiumReveal = useRef(PODIUM.map(() => new Animated.Value(0))).current;
-  const stickyReveal = useFadeIn({ duration: 360, delay: 220, fromY: 30, fromScale: 0.99 });
-
-  useEffect(() => {
-    Animated.stagger(
-      120,
-      podiumReveal.map((anim) =>
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 340,
-          useNativeDriver: true,
-        })
-      )
-    ).start();
-  }, [podiumReveal]);
 
   const bottomTabs = useMemo(
     () => [
-      { key: "map" as const, label: "Harita", icon: <MapIcon size={16} color={theme.colors.textMuted} /> },
-      { key: "missions" as const, label: "Görev", icon: <Target size={16} color={theme.colors.textMuted} /> },
-      { key: "feed" as const, label: "Feed", icon: <ShoppingBag size={16} color={theme.colors.textMuted} /> },
-      { key: "notifications" as const, label: "Bildirim", icon: <Bell size={16} color={theme.colors.textMuted} /> },
-      { key: "profile" as const, label: "Ben", icon: <User size={16} color={theme.colors.primaryCyan} /> },
+      { key: "map" as const, label: "Harita", icon: <Map size={12} color="#A9B4C0" /> },
+      { key: "leaderboard" as const, label: "Liderlik", icon: <Trophy size={12} color="#10F4E8" /> },
+      { key: "rewards" as const, label: "Oduller", icon: <Gift size={12} color="#A9B4C0" />, badgeCount: 1 },
+      { key: "store" as const, label: "Dukkan", icon: <ShoppingCart size={12} color="#A9B4C0" /> },
     ],
     []
   );
 
   return (
+    <ImageBackground source={require("../../assets/images/backbos.png")} style={styles.backgroundImage} resizeMode="cover">
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <AmbientGlow cyanOpacity={0.04} purpleOpacity={0.03} />
-      <View style={styles.glowTop} />
-      <View style={styles.glowBottom} />
-
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: getTabContentBottomSpace(insets.bottom, 136) }]}
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 128 }]}
         showsVerticalScrollIndicator={false}
-        decelerationRate="fast"
       >
-        <View style={styles.headerWrap}>
-          <Text style={styles.title}>Liderlik</Text>
-          <Text style={styles.subtitle}>�?ehrindeki en güçlü alan sahipleri</Text>
+        <View style={styles.topHudRow}>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatarCore}>
+              <Text style={styles.avatarText}>AL</Text>
+            </View>
+            <View style={styles.levelChip}>
+              <Text style={styles.levelText}>24</Text>
+            </View>
+          </View>
+
+          <View style={styles.balancePill}>
+            <View style={styles.coinIcon} />
+            <Text style={styles.balanceText}>2.450</Text>
+            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
+          </View>
+
+          <View style={styles.balancePill}>
+            <Gem size={20} color="#7F9CFF" fill="#7F9CFF" />
+            <Text style={styles.balanceText}>128</Text>
+            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
+          </View>
+
+          <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
+            <Bell size={25} color="#FFFFFF" />
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>3</Text>
+            </View>
+          </Pressable>
         </View>
 
-        <View style={[styles.filterRow, narrow && styles.filterRowWrap]}>
-          {FILTERS.map((filter) => {
-            const active = filter.key === activeFilter;
-            return (
-              <Pressable
-                key={filter.key}
-                onPress={() => setActiveFilter(filter.key)}
-                style={({ pressed }) => [styles.filterPill, narrow && styles.filterPillNarrow, active && styles.filterPillActive, pressed && styles.pressed]}
-              >
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>{filter.label}</Text>
+        <View style={styles.scaledContentWrap}>
+          <View style={styles.scaledContent}>
+            <Text style={styles.title}>LIDERLIK</Text>
+
+            <View style={styles.seasonRow}>
+              <Pressable style={styles.seasonPill}>
+                <Text style={styles.seasonPillText}>Sezon 1</Text>
+                <ChevronDown size={14} color="#A9B4C0" />
               </Pressable>
-            );
-          })}
-        </View>
+              <Text style={styles.seasonTime}>Sezon bitimine: 22g 14s 32d</Text>
+            </View>
 
-        <GlassCard style={styles.podiumCard} contentStyle={styles.podiumContent}>
-          <Text style={styles.sectionLabel}>TOP 3 PODIUM</Text>
-          <View style={styles.podiumRow}>
-            {PODIUM.map((player, index) => {
-              const palette = podiumPalette(player.rank);
-              return (
-                <Animated.View
-                  key={player.rank}
-                  style={[
-                    styles.podiumItem,
-                    player.rank === 1 && styles.podiumCenter,
-                    {
-                      opacity: podiumReveal[index],
-                      transform: [
-                        {
-                          translateY: podiumReveal[index].interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [18, 0],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                >
-                  {player.rank === 1 ? (
-                    <GlowPulseView style={[styles.podiumGlow, { backgroundColor: palette.glow }]} duration={600} minOpacity={0.7} maxOpacity={1} minScale={1} maxScale={1.05} />
-                  ) : (
-                    <View style={[styles.podiumGlow, { backgroundColor: palette.glow }]} />
-                  )}
-                  <IconBadge
-                    tone={palette.tone}
-                    size={player.rank === 1 ? 56 : 48}
-                    icon={player.name.slice(0, 2).toUpperCase()}
-                    style={[styles.avatar, { borderColor: palette.border }]}
-                  />
-                  <Text style={styles.playerName}>{player.name}</Text>
-                  <Text style={[styles.playerRank, { color: palette.text }]}>{palette.badge}</Text>
-                  <Text style={styles.playerMeta}>Lv {player.level}</Text>
-                  <Text style={styles.playerMeta}>{player.area}</Text>
-                  <Text style={styles.playerMeta}>{player.weeklyXp}</Text>
-                  <View style={[styles.podiumColumn, { height: palette.colHeight, borderColor: palette.border, backgroundColor: palette.glow }]}>
-                    <AnimatedGradient color="rgba(255,255,255,0.22)" duration={980} />
+            <View style={styles.scopeTabs}>
+              <Pressable style={[styles.scopeTab, styles.scopeTabActive]}>
+                <Globe size={15} color="#10F4E8" />
+                <Text style={[styles.scopeTabText, styles.scopeTabTextActive]}>Genel</Text>
+              </Pressable>
+              <Pressable style={styles.scopeTab}>
+                <Building2 size={15} color="#7E8C9B" />
+                <Text style={styles.scopeTabText}>Sehrim</Text>
+              </Pressable>
+              <Pressable style={styles.scopeTab}>
+                <Users size={15} color="#7E8C9B" />
+                <Text style={styles.scopeTabText}>Arkadaslar</Text>
+              </Pressable>
+              <Pressable style={styles.scopeTab}>
+                <Shield size={15} color="#7E8C9B" />
+                <Text style={styles.scopeTabText}>Klanlar</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.podiumCard}>
+              <View style={styles.podiumInner}>
+                <View style={styles.podiumSideCol}>
+                  <View style={[styles.podiumAvatar, styles.podiumAvatarSilver]}>
+                    <Crown size={14} color="#BBD4FF" />
                   </View>
-                </Animated.View>
-              );
-            })}
+                  <Text style={styles.podiumName}>NeonQueen</Text>
+                  <Text style={styles.podiumCity}>Ankara</Text>
+                  <Text style={[styles.podiumArea, styles.podiumAreaBlue]}>98.750 m2</Text>
+                  <View style={[styles.podiumBase, styles.podiumBaseBlue]}>
+                    <Text style={styles.podiumRank}>2</Text>
+                  </View>
+                </View>
+
+                <View style={styles.podiumCenterCol}>
+                  <View style={[styles.podiumAvatar, styles.podiumAvatarGold]}>
+                    <Crown size={16} color="#FFD25B" />
+                  </View>
+                  <Text style={styles.podiumName}>ShadowWalker</Text>
+                  <Text style={styles.podiumCity}>Istanbul</Text>
+                  <Text style={[styles.podiumArea, styles.podiumAreaGold]}>125.430 m2</Text>
+                  <View style={[styles.podiumBase, styles.podiumBaseGold]}>
+                    <Text style={styles.podiumRank}>1</Text>
+                  </View>
+                </View>
+
+                <View style={styles.podiumSideCol}>
+                  <View style={[styles.podiumAvatar, styles.podiumAvatarBronze]}>
+                    <Crown size={14} color="#FFBE75" />
+                  </View>
+                  <Text style={styles.podiumName}>ZoneMaster</Text>
+                  <Text style={styles.podiumCity}>Izmir</Text>
+                  <Text style={[styles.podiumArea, styles.podiumAreaBronze]}>87.160 m2</Text>
+                  <View style={[styles.podiumBase, styles.podiumBaseBronze]}>
+                    <Text style={styles.podiumRank}>3</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.listWrap}>
+              {ranking.map((item) => {
+                const colors = avatarColors(item.rank);
+                return (
+                  <Pressable key={item.rank} style={[styles.rankRow, item.highlight && styles.rankRowHighlight]}>
+                    <Text style={[styles.rankIndex, item.highlight && styles.rankIndexHighlight]}>{item.rank}</Text>
+
+                    <View style={[styles.rowAvatar, { borderColor: colors.ring, backgroundColor: colors.fill }]}>
+                      <Text style={styles.rowAvatarText}>{item.name.slice(0, 2).toUpperCase()}</Text>
+                      <View style={styles.rowLevelBadge}>
+                        <Text style={styles.rowLevelText}>{item.level}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.rowMeta}>
+                      <Text style={[styles.rowName, item.highlight && styles.rowNameHighlight]}>{item.name}</Text>
+                      <Text style={styles.rowCity}>{item.city}</Text>
+                    </View>
+
+                    <Text style={styles.rowArea}>{item.area}</Text>
+                    <ChevronRight size={18} color="#8D9AA8" />
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
-        </GlassCard>
-
-        <View style={styles.listWrap}>
-          {RANKING.length === 0 ? (
-            <EmptyState
-              title="Liderlik Verisi Hazırlanıyor"
-              message="Sıralama listesi birkaç saniye içinde yenilenecek."
-            />
-          ) : null}
-          {RANKING.map((player) => (
-            <Pressable
-              key={player.rank}
-              onPress={() => {
-                // TODO: Open player detail panel.
-              }}
-            >
-            <GlassCard style={styles.rowCard} contentStyle={styles.rowContent}>
-              <View style={styles.leftRow}>
-                <Text style={styles.rankText}>#{player.rank}</Text>
-                <IconBadge tone="neutral" size={40} icon={player.initials} />
-                <View>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.username}>{player.username}</Text>
-                    {player.premium ? (
-                      <Pressable style={styles.premiumBadge} onPress={() => router.push(ROUTES.premium)}>
-                        <Crown size={10} color={theme.colors.goldReward} />
-                        <Text style={styles.premiumText}>PREMIUM</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  <Text style={styles.detailText}>Level {player.level}</Text>
-                </View>
-              </View>
-
-              <View style={styles.rightMeta}>
-                <Text style={styles.areaValue}>{player.totalArea}</Text>
-                <View style={styles.xpRow}>
-                  <Zap size={12} color={theme.colors.primaryCyan} />
-                  <Text style={styles.xpValue}>{player.weeklyXp}</Text>
-                </View>
-              </View>
-            </GlassCard>
-            </Pressable>
-          ))}
         </View>
-
       </ScrollView>
-
-      <Animated.View style={[styles.stickyWrap, { bottom: getTabContentBottomSpace(insets.bottom, 4) }, stickyReveal.style]}>
-        <NeonOutline borderRadius={theme.radius.lg} color="rgba(0, 229, 204, 0.46)">
-          <GlassCard style={styles.selfCard} contentStyle={styles.selfContent}>
-          <View style={styles.selfTopRow}>
-            <View style={styles.selfLabelRow}>
-              <Shield size={14} color={theme.colors.primaryCyan} />
-              <Text style={styles.selfTitle}>Sen #18</Text>
-            </View>
-            <View style={styles.selfPremiumBadge}>
-              <Text style={styles.selfPremiumBadgeText}>PREMIUM</Text>
-            </View>
-          </View>
-
-          <View style={styles.selfStatsRow}>
-            <Text style={styles.selfStatValue}>12.450 m²</Text>
-            <Text style={styles.selfStatValue}>3.200 XP</Text>
-          </View>
-
-          <Text style={styles.motivation}>İlk 10'a girmek için 2.100 m² daha fethet.</Text>
-          </GlassCard>
-        </NeonOutline>
-      </Animated.View>
 
       <BottomTabBar<BottomKey>
         tabs={bottomTabs}
-        activeKey="profile"
+        activeKey="leaderboard"
         onTabPress={(key) => {
           if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "missions") router.push(ROUTES.tabs.missions);
-          if (key === "feed") router.push(ROUTES.tabs.feed);
-          if (key === "notifications") router.push(ROUTES.tabs.notifications);
-          if (key === "profile") router.push(ROUTES.tabs.profile);
+          if (key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
+          if (key === "rewards") router.push(ROUTES.tabs.missions);
+          if (key === "store") router.push(ROUTES.tabs.store);
         }}
-        style={styles.bottomTabs}
       />
     </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.backgroundDeep,
+    backgroundColor: "transparent",
   },
-  glowTop: {
-    position: "absolute",
-    top: -120,
-    right: -90,
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "rgba(255, 200, 87, 0.08)",
-  },
-  glowBottom: {
-    position: "absolute",
-    bottom: 110,
-    left: -110,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(0, 229, 204, 0.07)",
+  scroll: {
+    flex: 1,
   },
   content: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
-    gap: theme.spacing.sm,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    gap: 10,
   },
-  headerWrap: {
-    gap: 4,
-  },
-  title: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 28,
-  },
-  subtitle: {
-    color: theme.colors.textSecondary,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.size.sm,
-  },
-  filterRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  filterRowWrap: {
-    flexWrap: "wrap",
-  },
-  filterPill: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    backgroundColor: theme.colors.surfaceLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterPillNarrow: {
-    minWidth: "48%",
-  },
-  filterPillActive: {
-    borderColor: "rgba(0, 229, 204, 0.54)",
-    backgroundColor: "rgba(0, 229, 204, 0.11)",
-  },
-  filterText: {
-    color: theme.colors.textSecondary,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: 12,
-  },
-  filterTextActive: {
-    color: theme.colors.primaryCyan,
-    fontFamily: theme.typography.fontFamily.semibold,
-  },
-  podiumCard: {
-    marginTop: 4,
-  },
-  podiumContent: {
-    gap: theme.spacing.sm,
-  },
-  sectionLabel: {
-    color: theme.colors.textMuted,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 11,
-    letterSpacing: 1,
-  },
-  podiumRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  podiumItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  podiumCenter: {
-    marginTop: -8,
-  },
-  podiumGlow: {
-    position: "absolute",
-    top: -12,
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    opacity: 0.55,
-  },
-  avatar: {
-    marginBottom: 6,
-  },
-  playerName: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 12,
-  },
-  playerRank: {
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  playerMeta: {
-    color: theme.colors.textSecondary,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: 10,
-    marginTop: 1,
-  },
-  podiumColumn: {
-    overflow: "hidden",
-    marginTop: 8,
-    width: "82%",
-    borderTopLeftRadius: theme.radius.md,
-    borderTopRightRadius: theme.radius.md,
-    borderWidth: 1,
-  },
-  listWrap: {
-    gap: 8,
-  },
-  rowCard: {
-    borderRadius: theme.radius.md,
-  },
-  rowContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  leftRow: {
+  topHudRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    flex: 1,
+    marginTop: 1,
   },
-  rankText: {
-    color: theme.colors.textSecondary,
+  avatarWrap: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    borderWidth: 1.5,
+    borderColor: "rgba(16, 244, 232, 0.85)",
+    backgroundColor: "rgba(8, 18, 28, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#10F4E8",
+    shadowOpacity: 0.42,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  avatarCore: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: "#FFFFFF",
     fontFamily: theme.typography.fontFamily.bold,
-    width: 34,
+    fontSize: 19,
   },
-  nameRow: {
+  levelChip: {
+    position: "absolute",
+    right: -6,
+    bottom: -5,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 11,
+    backgroundColor: "rgba(8, 18, 28, 0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.42)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  levelText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
+  },
+  balancePill: {
+    width: 109,
+    height: 42,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
   },
-  username: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 13,
-  },
-  detailText: {
-    marginTop: 2,
-    color: theme.colors.textMuted,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: 11,
-  },
-  premiumBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: theme.radius.full,
+  coinIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FFC83D",
     borderWidth: 1,
-    borderColor: "rgba(255, 200, 87, 0.32)",
-    backgroundColor: "rgba(255, 200, 87, 0.09)",
+    borderColor: "#FFE08E",
   },
-  premiumText: {
-    color: theme.colors.goldReward,
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 9,
-  },
-  rightMeta: {
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  areaValue: {
-    color: theme.colors.textPrimary,
+  balanceText: {
+    color: "#FFFFFF",
     fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 16,
+  },
+  bellButton: {
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellBadge: {
+    position: "absolute",
+    right: -4,
+    top: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#10F4E8",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    color: "#043038",
+    fontFamily: theme.typography.fontFamily.bold,
     fontSize: 12,
   },
-  xpRow: {
+  scaledContentWrap: {
+    marginTop: -150,
+    paddingHorizontal: 12,
+    alignSelf: "stretch",
+  },
+  scaledContent: {
+    width: "142.857%",
+    transform: [{ scale: 0.7 }],
+    alignSelf: "center",
+  },
+  title: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 46,
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  seasonRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "space-between",
   },
-  xpValue: {
-    color: theme.colors.primaryCyan,
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 11,
-  },
-  stickyWrap: {
-    position: "absolute",
-    left: theme.spacing.md,
-    right: theme.spacing.md,
-  },
-  selfCard: {
-    borderColor: "rgba(0, 229, 204, 0.40)",
-  },
-  selfContent: {
-    paddingVertical: 12,
+  seasonPill: {
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.24)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 15,
     gap: 8,
   },
-  selfTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  seasonPillText: {
+    color: "#E3EAF3",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 28,
+    lineHeight: 28,
   },
-  selfLabelRow: {
+  seasonTime: {
+    color: "#7EEBFF",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 17,
+  },
+  scopeTabs: {
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.24)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
     flexDirection: "row",
     alignItems: "center",
+    padding: 4,
+    gap: 3,
+  },
+  scopeTab: {
+    height: 50,
+    flex: 1,
+    borderRadius: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
   },
-  selfTitle: {
-    color: theme.colors.primaryCyan,
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 14,
-  },
-  selfPremiumBadge: {
-    borderRadius: theme.radius.full,
+  scopeTabActive: {
+    backgroundColor: "rgba(16, 244, 232, 0.12)",
     borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    backgroundColor: theme.colors.surfaceLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderColor: "rgba(16, 244, 232, 0.45)",
   },
-  selfPremiumBadgeText: {
-    color: theme.colors.textSecondary,
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: 10,
-  },
-  selfStatsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  selfStatValue: {
-    color: theme.colors.textPrimary,
+  scopeTabText: {
+    color: "#7E8C9B",
     fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 14,
+    fontSize: 24,
+    lineHeight: 24,
   },
-  motivation: {
-    color: theme.colors.textSecondary,
+  scopeTabTextActive: {
+    color: "#10F4E8",
+  },
+  podiumCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(80, 120, 190, 0.35)",
+    backgroundColor: "rgba(10, 19, 39, 0.92)",
+    overflow: "hidden",
+    minHeight: 330,
+    justifyContent: "flex-end",
+  },
+  podiumInner: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  podiumSideCol: {
+    width: "31%",
+    alignItems: "center",
+  },
+  podiumCenterCol: {
+    width: "36%",
+    alignItems: "center",
+  },
+  podiumAvatar: {
+    width: 98,
+    height: 98,
+    borderRadius: 49,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  podiumAvatarSilver: {
+    borderColor: "#9FD0FF",
+    backgroundColor: "rgba(159, 208, 255, 0.11)",
+  },
+  podiumAvatarGold: {
+    width: 124,
+    height: 124,
+    borderRadius: 62,
+    borderColor: "#FFD25B",
+    backgroundColor: "rgba(255, 210, 91, 0.12)",
+  },
+  podiumAvatarBronze: {
+    borderColor: "#FFAD64",
+    backgroundColor: "rgba(255, 173, 100, 0.12)",
+  },
+  podiumName: {
+    color: "#F2F6FB",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 16,
+  },
+  podiumCity: {
+    color: "#A7B3C2",
     fontFamily: theme.typography.fontFamily.medium,
     fontSize: 12,
   },
-  bottomTabs: {
-    borderTopColor: theme.colors.borderSubtle,
+  podiumArea: {
+    marginTop: 2,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 33,
+    lineHeight: 33,
   },
-  pressed: {
-    opacity: 0.88,
+  podiumAreaBlue: {
+    color: "#6CEFFF",
+  },
+  podiumAreaGold: {
+    color: "#FFD25B",
+  },
+  podiumAreaBronze: {
+    color: "#FFAD64",
+  },
+  podiumBase: {
+    marginTop: 8,
+    width: "100%",
+    borderRadius: 99,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  podiumBaseBlue: {
+    height: 56,
+    borderColor: "rgba(108, 239, 255, 0.55)",
+    backgroundColor: "rgba(108, 239, 255, 0.12)",
+  },
+  podiumBaseGold: {
+    height: 74,
+    borderColor: "rgba(255, 210, 91, 0.6)",
+    backgroundColor: "rgba(255, 210, 91, 0.15)",
+  },
+  podiumBaseBronze: {
+    height: 50,
+    borderColor: "rgba(255, 173, 100, 0.58)",
+    backgroundColor: "rgba(255, 173, 100, 0.15)",
+  },
+  podiumRank: {
+    color: "#F2F6FB",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 26,
+  },
+  listWrap: {
+    gap: 6,
+  },
+  rankRow: {
+    minHeight: 78,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    gap: 10,
+  },
+  rankRowHighlight: {
+    borderColor: "rgba(16, 244, 232, 0.56)",
+    backgroundColor: "rgba(16, 244, 232, 0.08)",
+  },
+  rankIndex: {
+    width: 28,
+    color: "#AEB9C6",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 38,
+    lineHeight: 38,
+    textAlign: "center",
+  },
+  rankIndexHighlight: {
+    color: "#6CEFFF",
+  },
+  rowAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowAvatarText: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 15,
+  },
+  rowLevelBadge: {
+    position: "absolute",
+    right: -2,
+    top: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 187, 82, 0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  rowLevelText: {
+    color: "#1C232B",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 10,
+  },
+  rowMeta: {
+    flex: 1,
+    gap: 1,
+  },
+  rowName: {
+    color: "#F1F5FB",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 17,
+  },
+  rowNameHighlight: {
+    color: "#6CEFFF",
+  },
+  rowCity: {
+    color: "#A6B2C0",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
+  },
+  rowArea: {
+    color: "#62EEFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 18,
   },
 });
-

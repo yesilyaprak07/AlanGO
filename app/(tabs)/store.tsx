@@ -1,329 +1,487 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
+import { useMemo } from "react";
+import { FlatList, Image, ImageBackground, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Bell, Gift, Map, Plus, ShoppingCart, Trophy } from "lucide-react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { AvatarImages, BoostImages, ChestImages, CoinImages, UIImages } from "@/assets/images";
+import {
+  BoostCard,
+  ChestCard,
+  CoinPackCard,
+  ExtraSlotCard,
+  PremiumCTACard,
+  SectionHeader,
+} from "@/components/shop";
+import { BottomTabBar } from "@/components/ui";
+import { ROUTES } from "@/constants/routes";
+import { theme } from "@/constants/theme";
 
-type Category = "all" | "defense" | "attack" | "style";
+type BottomKey = "map" | "leaderboard" | "rewards" | "store";
 
-const DEFENSE_ITEMS = [
-  { id: 1, name: "Kalkan", icon: "🛡️", desc: "2 saat dokunulmaz", price: 120, unit: "🔗", popular: true, color: Colors.emerald },
-  { id: 2, name: "Radar+", icon: "📡", desc: "500m tarama", price: 80, unit: "🔗", color: Colors.cyan },
+type PowerItem = {
+  id: string;
+  title: string;
+  description: string;
+  asset: ReturnType<typeof require>;
+  price: number;
+  accentColor: string;
+};
+
+type ChestItem = {
+  id: string;
+  title: string;
+  rarity: string;
+  rarityColor: string;
+  asset: ReturnType<typeof require>;
+  duration: string;
+  price: number;
+};
+
+type CoinPackItem = {
+  id: string;
+  amount: string;
+  asset: ReturnType<typeof require>;
+  price: string;
+  extraLabel?: string;
+  highlightGold?: boolean;
+};
+
+const POWER_ITEMS: PowerItem[] = [
+  {
+    id: "speed",
+    title: "Hız Boost x2",
+    description: "5 dakika boyunca hat çizim hızını 2 katına çıkarır.",
+    asset: BoostImages.speed,
+    price: 80,
+    accentColor: "#00E5FF",
+  },
+  {
+    id: "shield",
+    title: "Kalkan",
+    description: "3 dakika boyunca hat kesilmeye karşı koruma sağlar.",
+    asset: BoostImages.shield,
+    price: 120,
+    accentColor: "#00FF88",
+  },
+  {
+    id: "radar",
+    title: "Radar",
+    description: "800m çevredeki aktif oyuncuları gösterir.",
+    asset: BoostImages.radar,
+    price: 60,
+    accentColor: "#A855F7",
+  },
 ];
 
-const ATTACK_ITEMS = [
-  { id: 3, name: "Kılıç+", icon: "⚔️", desc: "Güçlü kesim modu", price: 160, unit: "🔗", popular: true, color: Colors.coral },
-  { id: 4, name: "Hız Boost", icon: "⚡", desc: "2x hız · 30dk", price: 90, unit: "🔗", color: Colors.gold },
+const CHEST_ITEMS: ChestItem[] = [
+  {
+    id: "normal",
+    title: "Normal Sandık",
+    rarity: "Yaygın",
+    rarityColor: "#00E5FF",
+    asset: ChestImages.normal,
+    duration: "02:15",
+    price: 12,
+  },
+  {
+    id: "rare",
+    title: "Rare Sandık",
+    rarity: "Nadir",
+    rarityColor: "#3B82F6",
+    asset: ChestImages.rare,
+    duration: "22:30",
+    price: 28,
+  },
+  {
+    id: "epic",
+    title: "Epic Sandık",
+    rarity: "Destansı",
+    rarityColor: "#A855F7",
+    asset: ChestImages.epic,
+    duration: "02:45:15",
+    price: 72,
+  },
+  {
+    id: "legendary",
+    title: "Legendary Sandık",
+    rarity: "Efsanevi",
+    rarityColor: "#FFD700",
+    asset: ChestImages.legendary,
+    duration: "07:59:40",
+    price: 120,
+  },
 ];
 
-const STYLE_ITEMS = [
-  { id: 5, name: "Cyan Skin", icon: "🎨", desc: "Bölge görünümü", price: 300, unit: "🔗", color: Colors.cyan },
-  { id: 6, name: "Komutan", icon: "👑", desc: "VIP çerçeve", price: 500, unit: "🔗", color: Colors.gold },
-];
-
-function ItemCard({ item }: { item: typeof DEFENSE_ITEMS[0] }) {
-  return (
-    <TouchableOpacity style={styles.itemCard}>
-      {item.popular && (
-        <View style={styles.popularBadge}>
-          <Text style={styles.popularText}>EN ÇOK</Text>
-        </View>
-      )}
-      <View style={[styles.itemIconBg, { backgroundColor: `${item.color}18` }]}>
-        <Text style={styles.itemIcon}>{item.icon}</Text>
-      </View>
-      <Text style={styles.itemName}>{item.name}</Text>
-      <Text style={styles.itemDesc}>{item.desc}</Text>
-      <View style={styles.itemPriceRow}>
-        <Text style={styles.itemPriceIcon}>{item.unit}</Text>
-        <Text style={[styles.itemPrice, { color: item.color }]}>{item.price}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: "all", label: "Tümü" },
-  { key: "defense", label: "Savunma" },
-  { key: "attack", label: "Saldırı" },
-  { key: "style", label: "Stil" },
+const COIN_PACKS: CoinPackItem[] = [
+  { id: "2500", amount: "2.500", asset: CoinImages.pack_2500, price: "₺29,99" },
+  { id: "6500", amount: "6.500", asset: CoinImages.pack_6500, price: "₺69,99", extraLabel: "%10\nEKSTRA" },
+  { id: "15000", amount: "15.000", asset: CoinImages.pack_15000, price: "₺139,99", extraLabel: "%20\nEKSTRA" },
+  { id: "35000", amount: "35.000", asset: CoinImages.pack_35000, price: "₺249,99", extraLabel: "%30\nEKSTRA" },
+  { id: "75000", amount: "75.000", asset: CoinImages.pack_75000, price: "₺499,99", extraLabel: "%50\nEKSTRA", highlightGold: true },
 ];
 
 export default function StoreScreen() {
-  const [category, setCategory] = useState<Category>("all");
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  const showDefense = category === "all" || category === "defense";
-  const showAttack = category === "all" || category === "attack";
-  const showStyle = category === "all" || category === "style";
+  const bottomTabs = useMemo(
+    () => [
+      { key: "map" as const, label: "Harita", icon: <Map size={14} color="#A9B4C0" /> },
+      { key: "leaderboard" as const, label: "Liderlik", icon: <Trophy size={14} color="#A9B4C0" /> },
+      { key: "rewards" as const, label: "Ödüller", icon: <Gift size={14} color="#A9B4C0" />, badgeCount: 1 },
+      { key: "store" as const, label: "Dükkan", icon: <ShoppingCart size={14} color="#00E5FF" /> },
+    ],
+    []
+  );
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.sectionLabel}>MAĞAZA</Text>
-          <Text style={styles.title}>Komuta Merkezi</Text>
-        </View>
-        <View style={styles.coinBadge}>
-          <Text style={styles.coinIcon}>🔗</Text>
-          <Text style={styles.coinAmount}>2,840</Text>
-        </View>
-      </View>
-
-      {/* Category tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryTabs}>
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.key}
-            style={[styles.catTab, category === cat.key && styles.catTabActive]}
-            onPress={() => setCategory(cat.key)}
-          >
-            <Text style={[styles.catTabText, category === cat.key && styles.catTabTextActive]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {/* Limited offer */}
-        {(category === "all") && (
-          <View style={styles.limitedCard}>
-            <View style={styles.limitedTimer}>
-              <View style={styles.timerDot} />
-              <Text style={styles.timerText}>02:14:08</Text>
-              <Text style={styles.limitedLabel}>LİMİTLİ SEFER</Text>
+    <ImageBackground source={require("../../assets/images/backbos.png")} style={styles.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={[styles.container, { paddingTop: insets.top + 10 }]} edges={["top"]}>
+        <StatusBar barStyle="light-content" backgroundColor="#0A0E27" />
+        <View style={styles.topBar}>
+          <View style={styles.profileBlock}>
+            <View style={styles.avatarWrap}>
+              <Image source={AvatarImages.pilot} style={styles.avatarImage} resizeMode="cover" />
+              <View style={styles.levelBadgeSmall}>
+                <Text style={styles.levelBadgeSmallText}>19</Text>
+              </View>
             </View>
-            <View style={styles.limitedContent}>
-              <View style={styles.limitedIcon}>
-                <Text style={styles.limitedEmoji}>👑</Text>
+
+            <View style={styles.levelBarWrap}>
+              <View style={styles.levelHex}>
+                <Text style={styles.levelHexText}>19</Text>
               </View>
-              <View style={styles.limitedInfo}>
-                <Text style={styles.limitedTitle}>Komutan Paketi</Text>
-                <View style={styles.limitedItems}>
-                  <Text style={styles.limitedItemIcon}>🛡️</Text>
-                  <Text style={styles.limitedItemIcon}>📡</Text>
-                  <View style={styles.limitedCoins}>
-                    <Text style={styles.limitedCoinIcon}>🔗</Text>
-                    <Text style={styles.limitedCoinAmount}>500</Text>
-                  </View>
+              <View style={styles.xpWrap}>
+                <View style={styles.xpBar}>
+                  <View style={styles.xpFill} />
                 </View>
-              </View>
-              <View style={styles.limitedPriceCol}>
-                <Text style={styles.limitedPrice}>₺49.99</Text>
-                <Text style={styles.limitedOriginal}>₺89.99</Text>
-                <View style={styles.discountBadge}>
-                  <Text style={styles.discountText}>-40%</Text>
+                <View style={styles.xpMeta}>
+                  <Text style={styles.xpValue}>202/1200</Text>
+                  <Text style={styles.xpLabel}>XP</Text>
                 </View>
               </View>
             </View>
           </View>
-        )}
 
-        {/* Defense section */}
-        {showDefense && (
-          <>
-            <Text style={styles.sectionHeader}>🛡️  SAVUNMA CEPHANESİ</Text>
-            <View style={styles.itemsGrid}>
-              {DEFENSE_ITEMS.map((item) => <ItemCard key={item.id} item={item} />)}
+          <View style={styles.counterGroup}>
+            <View style={styles.counterPill}>
+              <Image source={UIImages.coin} style={styles.counterIcon} resizeMode="contain" />
+              <Text style={styles.counterText}>133.141</Text>
+              <Pressable style={styles.plusButton}>
+                <Plus size={12} color="#00E5FF" strokeWidth={2.2} />
+              </Pressable>
             </View>
-          </>
-        )}
 
-        {/* Attack section */}
-        {showAttack && (
-          <>
-            <Text style={styles.sectionHeader}>⚔️  SALDIRI CEPHANESİ</Text>
-            <View style={styles.itemsGrid}>
-              {ATTACK_ITEMS.map((item) => <ItemCard key={item.id} item={item} />)}
-            </View>
-          </>
-        )}
-
-        {/* Style section */}
-        {showStyle && (
-          <>
-            <Text style={styles.sectionHeader}>🎨  STİL KOLEKSIYONU</Text>
-            <View style={styles.itemsGrid}>
-              {STYLE_ITEMS.map((item) => <ItemCard key={item.id} item={item} />)}
-            </View>
-          </>
-        )}
-
-        {/* Premium */}
-        <View style={styles.premiumCard}>
-          <View style={styles.premiumLeft}>
-            <Text style={styles.premiumIcon}>👑</Text>
-            <View>
-              <Text style={styles.premiumTitle}>Komutan Premium</Text>
-              <Text style={styles.premiumDesc}>Tüm itemler · Reklamsız · VIP rozet</Text>
+            <View style={styles.counterPill}>
+              <Image source={UIImages.gem} style={styles.counterIcon} resizeMode="contain" />
+              <Text style={styles.counterText}>38</Text>
+              <Pressable style={styles.plusButton}>
+                <Plus size={12} color="#00E5FF" strokeWidth={2.2} />
+              </Pressable>
             </View>
           </View>
-          <TouchableOpacity style={styles.premiumBtn}>
-            <Text style={styles.premiumBtnText}>₺29.99/ay</Text>
-          </TouchableOpacity>
+
+          <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
+            <Bell size={18} color="#FFFFFF" />
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>1</Text>
+            </View>
+          </Pressable>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
+          <Text style={styles.pageTitle}>DÜKKAN</Text>
+
+          <View style={styles.section}>
+            <SectionHeader title="GÜÇ-UP'LAR" />
+            <View style={styles.powerGrid}>
+              {POWER_ITEMS.map((item) => (
+                <BoostCard
+                  key={item.id}
+                  title={item.id === "speed" ? "Hız Boost" : item.title}
+                  description={item.description}
+                  asset={item.asset}
+                  price={item.price}
+                  accentColor={item.accentColor}
+                  badgeText={item.id === "speed" ? "x2" : undefined}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <SectionHeader title="SANDIKLAR" />
+            <View style={styles.chestGrid}>
+              {CHEST_ITEMS.map((item) => (
+                <ChestCard
+                  key={item.id}
+                  style={styles.chestCard}
+                  title={item.title}
+                  rarity={item.rarity}
+                  rarityColor={item.rarityColor}
+                  asset={item.asset}
+                  duration={item.duration}
+                  price={item.price}
+                />
+              ))}
+            </View>
+            <View style={styles.extraSlotWrap}>
+              <ExtraSlotCard />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <SectionHeader title="COIN PAKETLERİ" />
+            <FlatList
+              data={COIN_PACKS}
+              horizontal
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <CoinPackCard
+                  amount={item.amount}
+                  asset={item.asset}
+                  price={item.price}
+                  extraLabel={item.extraLabel}
+                  highlightGold={item.highlightGold}
+                />
+              )}
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={140}
+              decelerationRate="fast"
+              contentContainerStyle={styles.coinList}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <PremiumCTACard />
+          </View>
+        </ScrollView>
+
+        <BottomTabBar<BottomKey>
+          tabs={bottomTabs}
+          activeKey="store"
+          onTabPress={(key) => {
+            if (key === "map") router.push(ROUTES.tabs.map);
+            if (key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
+            if (key === "rewards") router.push(ROUTES.tabs.missions);
+            if (key === "store") return;
+          }}
+        />
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  sectionLabel: { fontSize: 10, fontWeight: "700", color: Colors.purple, letterSpacing: 2, marginBottom: 2 },
-  title: { fontSize: 24, fontWeight: "800", color: Colors.textPrimary },
-  coinBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: `${Colors.gold}18`,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: `${Colors.gold}40`,
-  },
-  coinIcon: { fontSize: 16 },
-  coinAmount: { fontSize: 15, fontWeight: "700", color: Colors.gold },
-  categoryTabs: {
-    paddingHorizontal: 20,
-    gap: 8,
-    marginBottom: 16,
-  },
-  catTab: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceSolid,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
-  },
-  catTabActive: { backgroundColor: Colors.purple, borderColor: Colors.purple },
-  catTabText: { fontSize: 13, fontWeight: "600", color: Colors.textSecondary },
-  catTabTextActive: { color: Colors.textPrimary },
-  content: { paddingHorizontal: 20, paddingBottom: 40 },
-
-  // Limited offer card
-  limitedCard: {
-    backgroundColor: `${Colors.purple}18`,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: `${Colors.purple}40`,
-    marginBottom: 24,
-  },
-  limitedTimer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 12,
-  },
-  timerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.coral },
-  timerText: { fontSize: 13, fontWeight: "700", color: Colors.textPrimary },
-  limitedLabel: { fontSize: 10, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1, marginLeft: 4 },
-  limitedContent: { flexDirection: "row", alignItems: "center", gap: 12 },
-  limitedIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: `${Colors.gold}20`,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  limitedEmoji: { fontSize: 28 },
-  limitedInfo: { flex: 1 },
-  limitedTitle: { fontSize: 17, fontWeight: "700", color: Colors.textPrimary, marginBottom: 8 },
-  limitedItems: { flexDirection: "row", alignItems: "center", gap: 6 },
-  limitedItemIcon: { fontSize: 18 },
-  limitedCoins: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: `${Colors.cyan}18`,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  limitedCoinIcon: { fontSize: 12 },
-  limitedCoinAmount: { fontSize: 12, fontWeight: "700", color: Colors.cyan },
-  limitedPriceCol: { alignItems: "flex-end", gap: 4 },
-  limitedPrice: { fontSize: 18, fontWeight: "800", color: Colors.textPrimary },
-  limitedOriginal: { fontSize: 12, color: Colors.textMuted, textDecorationLine: "line-through" },
-  discountBadge: {
-    backgroundColor: Colors.emerald,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  discountText: { fontSize: 11, fontWeight: "800", color: Colors.background },
-
-  // Section header
-  sectionHeader: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1, marginBottom: 12 },
-  itemsGrid: { flexDirection: "row", gap: 12, marginBottom: 24 },
-  itemCard: {
+  backgroundImage: {
     flex: 1,
-    backgroundColor: Colors.surfaceSolid,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.surfaceBorder,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  profileBlock: {
+    flexShrink: 1,
+    flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    position: "relative",
+  },
+  avatarWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.45)",
+    overflow: "visible",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 27,
+  },
+  levelBadgeSmall: {
+    position: "absolute",
+    right: -3,
+    top: -3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#00E5FF",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  levelBadgeSmallText: {
+    color: "#052638",
+    fontSize: 10,
+    fontFamily: theme.typography.fontFamily.bold,
+  },
+  levelBarWrap: {
+    width: 130,
+    minHeight: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.28)",
+    backgroundColor: "rgba(10, 14, 39, 0.9)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    gap: 6,
+  },
+  levelHex: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "rgba(147, 197, 253, 0.8)",
+    backgroundColor: "rgba(96, 165, 250, 0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  levelHexText: {
+    color: "#E0F2FE",
+    fontSize: 12,
+    lineHeight: 12,
+    fontFamily: theme.typography.fontFamily.bold,
+  },
+  xpWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  xpBar: {
+    width: "100%",
+    height: 8,
+    borderRadius: 6,
+    backgroundColor: "rgba(148, 163, 184, 0.25)",
     overflow: "hidden",
   },
-  popularBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: Colors.coral,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+  xpFill: {
+    width: "17%",
+    height: "100%",
+    backgroundColor: "#22D3EE",
   },
-  popularText: { fontSize: 8, fontWeight: "800", color: Colors.textPrimary },
-  itemIconBg: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  itemIcon: { fontSize: 26 },
-  itemName: { fontSize: 14, fontWeight: "700", color: Colors.textPrimary },
-  itemDesc: { fontSize: 11, color: Colors.textSecondary, textAlign: "center" },
-  itemPriceRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 },
-  itemPriceIcon: { fontSize: 13 },
-  itemPrice: { fontSize: 16, fontWeight: "800" },
-
-  // Premium card
-  premiumCard: {
+  xpMeta: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: `${Colors.gold}12`,
+    gap: 6,
+  },
+  xpValue: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontFamily: theme.typography.fontFamily.semibold,
+  },
+  xpLabel: {
+    color: "#94A3B8",
+    fontSize: 10,
+    fontFamily: theme.typography.fontFamily.medium,
+  },
+  counterGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  counterPill: {
+    minWidth: 84,
+    height: 36,
     borderRadius: 18,
-    padding: 18,
     borderWidth: 1,
-    borderColor: `${Colors.gold}30`,
-    marginTop: 8,
+    borderColor: "rgba(0, 229, 255, 0.3)",
+    backgroundColor: "rgba(10, 14, 39, 0.9)",
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
   },
-  premiumLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  premiumIcon: { fontSize: 28 },
-  premiumTitle: { fontSize: 15, fontWeight: "700", color: Colors.textPrimary },
-  premiumDesc: { fontSize: 11, color: Colors.textSecondary },
-  premiumBtn: {
-    backgroundColor: Colors.gold,
+  counterIcon: {
+    width: 18,
+    height: 18,
+  },
+  counterText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.semibold,
+  },
+  plusButton: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.3)",
+    backgroundColor: "rgba(10, 14, 39, 0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  bellBadge: {
+    position: "absolute",
+    right: -3,
+    top: -3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  bellBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontFamily: theme.typography.fontFamily.bold,
+  },
+  content: {
+    paddingTop: 16,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: 24,
   },
-  premiumBtnText: { fontSize: 13, fontWeight: "800", color: Colors.background },
+  pageTitle: {
+    color: "#FFFFFF",
+    fontSize: 32,
+    fontFamily: theme.typography.fontFamily.bold,
+  },
+  section: {
+    gap: 0,
+  },
+  powerGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  chestGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  chestCard: {
+    flex: 1,
+  },
+  extraSlotWrap: {
+    marginTop: 12,
+  },
+  horizontalList: {
+    gap: 10,
+    paddingRight: 4,
+  },
+  coinList: {
+    paddingHorizontal: 16,
+    gap: 10,
+    marginHorizontal: -16,
+  },
 });
