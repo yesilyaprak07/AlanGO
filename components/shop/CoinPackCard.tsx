@@ -17,19 +17,19 @@ export function CoinPackCard({ amount, asset, price, extraLabel, highlightGold }
     <View style={[styles.card, { borderColor, shadowColor: highlightGold ? "#FFD700" : "#00E5FF", shadowOpacity: highlightGold ? 0.35 : 0.2 }]}> 
       {extraLabel ? (
         <View style={styles.extraBadge}>
-          <Text style={styles.extraText}>{extraLabel}</Text>
+          <Text allowFontScaling={false} style={styles.extraText}>{extraLabel}</Text>
         </View>
       ) : null}
 
       <View style={styles.amountRow}>
         <Image source={UIImages.coin} style={styles.coinIcon} resizeMode="contain" />
-        <Text style={styles.amountText}>{amount}</Text>
+        <Text allowFontScaling={false} style={styles.amountText}>{amount}</Text>
       </View>
 
       <Image source={asset} style={styles.asset} resizeMode="contain" />
 
       <View style={[styles.pricePill, { borderColor: highlightGold ? "rgba(255, 215, 0, 0.45)" : "rgba(0, 229, 255, 0.4)" }]}>
-        <Text style={styles.priceText}>{price}</Text>
+        <Text allowFontScaling={false} style={styles.priceText}>{price}</Text>
       </View>
     </View>
   );
@@ -37,24 +37,24 @@ export function CoinPackCard({ amount, asset, price, extraLabel, highlightGold }
 
 const styles = StyleSheet.create({
   card: {
-    width: 130,
+    width: 96,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.6,
     backgroundColor: "rgba(255, 255, 255, 0.03)",
-    padding: 10,
+    padding: 8,
     position: "relative",
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 10,
-    elevation: 4,
+    shadowRadius: 5,
+    elevation: 2,
   },
   extraBadge: {
     position: "absolute",
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     backgroundColor: "#DC2626",
     borderRadius: 999,
-    minWidth: 42,
-    minHeight: 42,
+    minWidth: 34,
+    minHeight: 34,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 6,
@@ -64,8 +64,8 @@ const styles = StyleSheet.create({
   extraText: {
     color: "#FFFFFF",
     textAlign: "center",
-    fontSize: 10,
-    lineHeight: 11,
+    fontSize: 9,
+    lineHeight: 10,
     fontFamily: theme.typography.fontFamily.bold,
   },
   amountRow: {
@@ -74,31 +74,31 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   coinIcon: {
-    width: 16,
-    height: 16,
+    width: 13,
+    height: 13,
   },
   amountText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 11,
     fontFamily: theme.typography.fontFamily.semibold,
   },
   asset: {
-    marginTop: 8,
+    marginTop: 6,
     width: "100%",
-    height: 80,
+    height: 62,
   },
   pricePill: {
-    marginTop: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    minHeight: 34,
+    marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 0.7,
+    minHeight: 30,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0, 229, 255, 0.08)",
   },
   priceText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 10,
     fontFamily: theme.typography.fontFamily.semibold,
   },
 });

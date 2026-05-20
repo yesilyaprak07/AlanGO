@@ -31,7 +31,7 @@ export function BottomTabBar<T extends string>({
   const bottomInset = safeBottomInset || insets.bottom;
 
   return (
-    <View style={[styles.wrap, { paddingBottom: bottomInset + 10 }, style]}>
+    <View style={[styles.wrap, { paddingBottom: bottomInset + 6 }, style]}>
       <BlurView intensity={24} tint="dark" style={styles.container}>
         {tabs.map((tab) => {
           const active = tab.key === activeKey;
@@ -46,14 +46,14 @@ export function BottomTabBar<T extends string>({
               style={({ pressed }) => [styles.item, active && styles.itemActive, pressed && styles.itemPressed, tab.disabled && styles.itemDisabled]}
             >
               <View style={styles.iconWrap}>
-                {typeof tab.icon === "string" ? <Text style={[styles.iconText, active && styles.iconTextActive]}>{tab.icon}</Text> : tab.icon}
+                {typeof tab.icon === "string" ? <Text allowFontScaling={false} style={[styles.iconText, active && styles.iconTextActive]}>{tab.icon}</Text> : tab.icon}
                 {typeof tab.badgeCount === "number" && tab.badgeCount > 0 ? (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{tab.badgeCount > 99 ? "99+" : tab.badgeCount}</Text>
+                    <Text allowFontScaling={false} style={styles.badgeText}>{tab.badgeCount > 99 ? "99+" : tab.badgeCount}</Text>
                   </View>
                 ) : null}
               </View>
-              <Text style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
+              <Text allowFontScaling={false} style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
             </Pressable>
           );
         })}
@@ -68,15 +68,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
   },
   container: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    height: 92,
-    borderRadius: 32,
-    paddingHorizontal: 14,
+    height: 74,
+    borderRadius: 18,
+    paddingHorizontal: 10,
     backgroundColor: "rgba(10, 14, 39, 0.95)",
     borderTopWidth: 1,
     borderColor: "rgba(120, 160, 180, 0.24)",
@@ -84,12 +84,12 @@ const styles = StyleSheet.create({
   },
   item: {
     flex: 1,
-    minHeight: 64,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 22,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
   },
   itemActive: {
     backgroundColor: "rgba(16, 244, 232, 0.08)",
@@ -117,10 +117,10 @@ const styles = StyleSheet.create({
     color: "#10F4E8",
   },
   label: {
-    marginTop: 6,
+    marginTop: 4,
     color: "#A9B4C0",
     fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 14,
+    fontSize: 12,
   },
   labelActive: {
     color: "#10F4E8",

@@ -3,7 +3,6 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimen
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  Bell,
   ChevronDown,
   ChevronRight,
   Crown,
@@ -11,13 +10,11 @@ import {
   ClipboardCheck,
   FlagTriangleRight,
   Footprints,
-  Gem,
   Gift,
   HelpCircle,
   LogOut,
   Map,
   Medal,
-  Plus,
   Settings,
   Shield,
   ShoppingCart,
@@ -31,7 +28,7 @@ import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import { darkMapStyle } from "@/constants/mapStyles";
 import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
-import { BottomTabBar } from "@/components/ui";
+import { BottomTabBar, TopHudBar } from "@/components/ui";
 
 const FALLBACK_CENTER = { latitude: 36.8969, longitude: 30.7133 };
 const HUD_SIDE_GAP = 7;
@@ -203,35 +200,15 @@ export default function MapScreen() {
       </MapView>
 
       <SafeAreaView style={styles.topOverlay} edges={["top"]}>
-        <View style={styles.topHudRow}>
-          <Pressable style={styles.avatarWrap} onPress={openMenu}>
-            <View style={styles.avatarCore}>
-              <Text style={styles.avatarText}>AL</Text>
-            </View>
-            <View style={styles.levelChip}>
-              <Text style={styles.levelText}>24</Text>
-            </View>
-          </Pressable>
-
-          <View style={styles.currencyChip}>
-            <View style={styles.coinIcon} />
-            <Text style={styles.currencyText}>2.450</Text>
-            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
-          </View>
-
-          <View style={styles.currencyChip}>
-            <Gem size={20} color="#7F9CFF" fill="#7F9CFF" />
-            <Text style={styles.currencyText}>128</Text>
-            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
-          </View>
-
-          <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
-            <Bell size={25} color="#FFFFFF" />
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>3</Text>
-            </View>
-          </Pressable>
-        </View>
+        <TopHudBar
+          onAvatarPress={openMenu}
+          onBellPress={() => router.push(ROUTES.tabs.notifications)}
+          avatarInitials="AL"
+          levelText="24"
+          coinText="2.450"
+          gemText="128"
+          bellCount={3}
+        />
       </SafeAreaView>
 
       <View style={[styles.rightRail, { top: insets.top + 72 }]}>

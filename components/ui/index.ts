@@ -4,6 +4,7 @@ export * from "./StatCard";
 export * from "./IconBadge";
 export * from "./TopModeSwitcher";
 export * from "./BottomTabBar";
+export * from "./TopHudBar";
 export * from "./PowerUpCard";
 export * from "./RewardCard";
 export * from "./CyberTextInput";

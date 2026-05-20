@@ -9,7 +9,7 @@ type SectionHeaderProps = {
 export function SectionHeader({ title }: SectionHeaderProps) {
   return (
     <View style={styles.row}>
-      <Text style={styles.title}>{title}</Text>
+      <Text allowFontScaling={false} style={styles.title}>{title}</Text>
       <Info size={14} color="#6B7280" strokeWidth={2} />
     </View>
   );
@@ -19,13 +19,13 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 10,
   },
   title: {
     color: "#FFFFFF",
     fontSize: 14,
-    letterSpacing: 1.5,
+    letterSpacing: 1,
     fontFamily: theme.typography.fontFamily.semibold,
   },
 });

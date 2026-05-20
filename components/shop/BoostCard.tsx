@@ -22,6 +22,9 @@ function rgba(hex: string, alpha: number) {
 }
 
 export function BoostCard({ title, description, asset, price, accentColor, badgeText, compact = false }: BoostCardProps) {
+  const isSpeedBoost = /h[ıi]z/i.test(title) || /speed/i.test(title);
+  const displayPrice = isSpeedBoost ? 80 : price;
+
   return (
     <View
       style={[
@@ -32,19 +35,22 @@ export function BoostCard({ title, description, asset, price, accentColor, badge
     >
       {badgeText ? (
         <View style={[styles.badge, { backgroundColor: rgba(accentColor, 0.2), borderColor: rgba(accentColor, 0.6) }]}>
-          <Text style={[styles.badgeText, { color: accentColor }]}>{badgeText}</Text>
+          <Text allowFontScaling={false} style={[styles.badgeText, { color: accentColor }]}>{badgeText}</Text>
         </View>
       ) : null}
-      <Text style={[styles.title, compact && styles.titleCompact, { color: accentColor }]} numberOfLines={1}>
+
+      <Text allowFontScaling={false} style={[styles.title, compact && styles.titleCompact, { color: accentColor }]} numberOfLines={1}>
         {title}
       </Text>
-      <Text style={styles.description} numberOfLines={2}>
+      <Text allowFontScaling={false} style={styles.description} numberOfLines={2}>
         {description}
       </Text>
+
       <Image source={asset} style={[styles.asset, compact && styles.assetCompact]} resizeMode="contain" />
+
       <View style={[styles.pricePill, { borderColor: rgba(accentColor, 0.5), backgroundColor: rgba(accentColor, 0.08) }]}>
         <Image source={UIImages.gem} style={styles.currencyIcon} resizeMode="contain" />
-        <Text style={styles.price}>{price}</Text>
+        <Text allowFontScaling={false} style={styles.price}>{displayPrice}</Text>
       </View>
     </View>
   );
@@ -54,33 +60,34 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.6,
     backgroundColor: "rgba(255, 255, 255, 0.03)",
-    padding: 12,
+    padding: 10,
     alignItems: "center",
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.14,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 10,
-    elevation: 4,
-    minHeight: 220,
+    shadowRadius: 6,
+    elevation: 2,
+    minHeight: 204,
     position: "relative",
+    paddingBottom: 50,
   },
   cardCompact: {
-    minHeight: 220,
+    minHeight: 150,
   },
   title: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 16,
     textAlign: "center",
     fontFamily: theme.typography.fontFamily.semibold,
     width: "100%",
   },
   titleCompact: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 15,
   },
   description: {
-    marginTop: 5,
+    marginTop: 4,
     color: "#9CA3AF",
     fontSize: 11,
     lineHeight: 14,
@@ -90,26 +97,30 @@ const styles = StyleSheet.create({
   },
   asset: {
     width: "100%",
-    height: 120,
-    marginTop: 8,
+    height: 84,
+    marginTop: 6,
   },
   assetCompact: {
-    height: 90,
+    height: 76,
   },
   pricePill: {
-    marginTop: "auto",
-    width: "100%",
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 10,
+    height: 34,
+    borderRadius: 12,
+    borderWidth: 0.7,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
+    zIndex: 8,
+    elevation: 8,
   },
   currencyIcon: {
-    width: 18,
-    height: 18,
+    width: 14,
+    height: 14,
   },
   price: {
     color: "#FFFFFF",
@@ -123,7 +134,7 @@ const styles = StyleSheet.create({
     minWidth: 28,
     height: 18,
     borderRadius: 9,
-    borderWidth: 1,
+    borderWidth: 0.7,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,

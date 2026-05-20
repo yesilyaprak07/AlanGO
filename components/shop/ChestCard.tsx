@@ -16,23 +16,23 @@ type ChestCardProps = {
 export function ChestCard({ title, rarity, rarityColor, asset, duration, price, style }: ChestCardProps) {
   return (
     <View style={[styles.card, style, { borderColor: `${rarityColor}55`, shadowColor: rarityColor }]}>
-      <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+      <Text allowFontScaling={false} style={styles.title} numberOfLines={2} ellipsizeMode="tail">
         {title}
       </Text>
-      <Text style={[styles.rarity, { color: rarityColor }]}>{rarity}</Text>
+      <Text allowFontScaling={false} style={[styles.rarity, { color: rarityColor }]}>{rarity}</Text>
       <Image source={asset} style={styles.asset} resizeMode="contain" />
-      <Text style={styles.durationLabel} numberOfLines={1}>
+      <Text allowFontScaling={false} style={styles.durationLabel} numberOfLines={1}>
         Açılma Süresi
       </Text>
       <View style={styles.durationRow}>
         <Clock3 size={13} color="#22D3EE" />
-        <Text style={styles.durationText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+        <Text allowFontScaling={false} style={styles.durationText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
           {duration}
         </Text>
       </View>
       <View style={[styles.pricePill, { borderColor: `${rarityColor}66` }]}>
         <Image source={UIImages.gem} style={styles.gem} resizeMode="contain" />
-        <Text style={styles.priceText}>{price}</Text>
+        <Text allowFontScaling={false} style={styles.priceText}>{price}</Text>
       </View>
     </View>
   );
@@ -41,36 +41,36 @@ export function ChestCard({ title, rarity, rarityColor, asset, duration, price, 
 const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.6,
     backgroundColor: "rgba(255, 255, 255, 0.03)",
-    padding: 12,
+    padding: 10,
     alignItems: "center",
-    shadowOpacity: 0.24,
+    shadowOpacity: 0.12,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 5,
+    elevation: 2,
   },
   title: {
     color: "#FFFFFF",
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 15,
     textAlign: "center",
     fontFamily: theme.typography.fontFamily.semibold,
-    minHeight: 32,
+    minHeight: 30,
   },
   rarity: {
-    marginTop: 2,
-    fontSize: 12,
+    marginTop: 1,
+    fontSize: 11,
     fontFamily: theme.typography.fontFamily.regular,
   },
   asset: {
     width: "100%",
-    height: 100,
-    marginTop: 8,
+    height: 82,
+    marginTop: 6,
   },
   durationLabel: {
-    marginTop: 2,
-    fontSize: 11,
+    marginTop: 1,
+    fontSize: 10,
     lineHeight: 12,
     color: "#9CA3AF",
     fontFamily: theme.typography.fontFamily.regular,
@@ -83,15 +83,15 @@ const styles = StyleSheet.create({
   },
   durationText: {
     color: "#FFFFFF",
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: theme.typography.fontFamily.semibold,
   },
   pricePill: {
-    marginTop: 10,
+    marginTop: 8,
     width: "100%",
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
+    height: 32,
+    borderRadius: 11,
+    borderWidth: 0.7,
     backgroundColor: "rgba(0, 229, 255, 0.08)",
     flexDirection: "row",
     alignItems: "center",
@@ -99,12 +99,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   gem: {
-    width: 16,
-    height: 16,
+    width: 14,
+    height: 14,
   },
   priceText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: theme.typography.fontFamily.semibold,
   },
 });

@@ -23,6 +23,9 @@ function hexToRgba(hex: string, alpha: number) {
 }
 
 export function BoostCard({ title, description, asset, price, accentColor }: BoostCardProps) {
+  const isSpeedBoost = /h[ıi]z/i.test(title) || /speed/i.test(title);
+  const displayPrice = isSpeedBoost ? 80 : price;
+
   return (
     <View
       style={[
@@ -42,7 +45,7 @@ export function BoostCard({ title, description, asset, price, accentColor }: Boo
 
       <View style={[styles.pricePill, { borderColor: hexToRgba(accentColor, 0.55), backgroundColor: hexToRgba(accentColor, 0.08) }]}>
         <Image source={UIImages.gem} style={styles.gemIcon} resizeMode="contain" />
-        <Text style={styles.priceText}>{price}</Text>
+        <Text style={styles.priceText}>{displayPrice}</Text>
       </View>
     </View>
   );
@@ -60,6 +63,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 10,
     elevation: 4,
+    position: "relative",
+    paddingBottom: 58,
   },
   title: {
     fontSize: 16,
@@ -82,8 +87,10 @@ const styles = StyleSheet.create({
     height: 120,
   },
   pricePill: {
-    marginTop: 8,
-    width: "100%",
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 14,
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
@@ -91,6 +98,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    zIndex: 8,
+    elevation: 8,
   },
   gemIcon: {
     width: 18,
