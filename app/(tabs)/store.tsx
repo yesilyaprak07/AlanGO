@@ -7,7 +7,8 @@ import { AvatarImages, UIImages } from "@/assets/images";
 import {
   PremiumCTACard,
 } from "@/components/shop";
-import { BottomTabBar, TopHudBar } from "@/components/ui";
+import { Header } from "@/components/Header";
+import { BottomNav } from "@/components/BottomNav";
 import { ROUTES } from "@/constants/routes";
 import { theme } from "@/constants/theme";
 
@@ -104,15 +105,9 @@ export default function StoreScreen() {
       <SafeAreaView style={[styles.container, { paddingTop: insets.top + 10 }]} edges={["top"]}>
         <StatusBar barStyle="light-content" backgroundColor="#0A0E27" />
         <View style={styles.topBarRow}>
-          <TopHudBar
+          <Header
             onAvatarPress={() => router.push(ROUTES.tabs.profile)}
             onBellPress={() => router.push(ROUTES.tabs.notifications)}
-            avatarImageSource={AvatarImages.pilot}
-            avatarFrameSource={require("@/assets/images/frames/frame_cyan.png")}
-            levelText="19"
-            coinText="133.141"
-            gemText="38"
-            bellCount={1}
           />
         </View>
 
@@ -137,7 +132,7 @@ export default function StoreScreen() {
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
           <View style={[styles.section, styles.powerSection]}>
             <View style={styles.sectionTitleRow}>
-              <Text allowFontScaling={false} style={[styles.sectionTitle, styles.powerTitleOffset]}>GÜÇ-UP'LAR</Text>
+              <Text allowFontScaling={false} style={[styles.sectionTitle, styles.powerTitleOffset]}>GÜÇ-UP&apos;LAR</Text>
             </View>
             <View style={styles.powerGrid}>
               {powerUps.map((item, index) => (
@@ -219,17 +214,7 @@ export default function StoreScreen() {
           </View>
         )}
 
-        <BottomTabBar<BottomKey>
-          tabs={bottomTabs}
-          activeKey={aktifSekme === "premium" ? "premium" : "store"}
-          onTabPress={(key) => {
-            if (key === "map") router.push(ROUTES.tabs.map);
-            if (key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
-            if (key === "rewards") router.push(ROUTES.tabs.missions);
-            if (key === "store") setAktifSekme("dukkan");
-            if (key === "premium") setAktifSekme("premium");
-          }}
-        />
+        <BottomNav activeTab="store" />
       </SafeAreaView>
     </View>
   );

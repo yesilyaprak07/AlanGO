@@ -1,38 +1,38 @@
 export const ChestImages = {
-  normal: require('./chests/chest_normal.png'),
-  rare: require('./chests/chest_rare.png'),
-  epic: require('./chests/chest_epic.png'),
-  legendary: require('./chests/chest_legendary.png'),
+  normal: require('./boosts/sandik_normal.png'),
+  rare: require('./boosts/sandik_rare.png'),
+  epic: require('./boosts/sandik_epik.png'),
+  legendary: require('./boosts/sandik_legend.png'),
 } as const;
 
 export type ChestType = keyof typeof ChestImages;
 
 export const BoostImages = {
-  speed: require('./boosts/boost_speed.png'),
-  shield: require('./boosts/boost_shield.png'),
-  radar: require('./boosts/boost_radar.png'),
-  xp: require('./boosts/boost_xp.png'),
-  unlimited: require('./boosts/boost_unlimited.png'),
-  area_lock: require('./boosts/boost_area_lock.png'),
-  daily_x2: require('./boosts/boost_daily_x2.png'),
-  energy: require('./boosts/boost_energy.png'),
-  areaLock: require('./boosts/boost_area_lock.png'),
-  dailyX2: require('./boosts/boost_daily_x2.png'),
+  speed: require('./boosts/boots_card.png'),
+  shield: require('./boosts/kalkan_card.png'),
+  radar: require('./boosts/radar_card.png'),
+  xp: require('./boosts/gem600.png'),
+  unlimited: require('./boosts/ayricalik.png'),
+  area_lock: require('./boosts/kalkan_card.png'),
+  daily_x2: require('./boosts/gem1500.png'),
+  energy: require('./boosts/gem200.png'),
+  areaLock: require('./boosts/kalkan_card.png'),
+  dailyX2: require('./boosts/gem1500.png'),
 } as const;
 
 export type BoostType = keyof typeof BoostImages;
 
 export const CoinImages = {
-  pack2500: require('./coins/coin_pack_2500.png'),
-  pack6500: require('./coins/coin_pack_6500.png'),
-  pack15000: require('./coins/coin_pack_15000.png'),
-  pack35000: require('./coins/coin_pack_35000.png'),
-  pack75000: require('./coins/coin_pack_75000.png'),
-  pack_2500: require('./coins/coin_pack_2500.png'),
-  pack_6500: require('./coins/coin_pack_6500.png'),
-  pack_15000: require('./coins/coin_pack_15000.png'),
-  pack_35000: require('./coins/coin_pack_35000.png'),
-  pack_75000: require('./coins/coin_pack_75000.png'),
+  pack2500: require('./boosts/coin_2500.png'),
+  pack6500: require('./boosts/coin_6500.png'),
+  pack15000: require('./boosts/coin_15000.png'),
+  pack35000: require('./boosts/coin_35000.png'),
+  pack75000: require('./boosts/coin_75000.png'),
+  pack_2500: require('./boosts/coin_2500.png'),
+  pack_6500: require('./boosts/coin_6500.png'),
+  pack_15000: require('./boosts/coin_15000.png'),
+  pack_35000: require('./boosts/coin_35000.png'),
+  pack_75000: require('./boosts/coin_75000.png'),
 } as const;
 
 export type CoinType = keyof typeof CoinImages;
@@ -73,9 +73,9 @@ export const FrameImages = {
 export type FrameType = keyof typeof FrameImages;
 
 export const PodiumImages = {
-  first: require('./podiums/podium_1st.png'),
-  second: require('./podiums/podium_2nd.png'),
-  third: require('./podiums/podium_3rd.png'),
+  first: require('./podiums/kursu.png'),
+  second: require('./podiums/kursu.png'),
+  third: require('./podiums/kursu.png'),
 } as const;
 
 export type PodiumType = keyof typeof PodiumImages;

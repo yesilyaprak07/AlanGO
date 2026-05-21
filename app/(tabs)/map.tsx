@@ -1,13 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Location from "expo-location";
 import {
   ChevronDown,
-  ChevronRight,
   Crown,
-  Crosshair,
-  ClipboardCheck,
   FlagTriangleRight,
   Footprints,
   Gift,
@@ -28,7 +26,8 @@ import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import { darkMapStyle } from "@/constants/mapStyles";
 import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
-import { BottomTabBar, TopHudBar } from "@/components/ui";
+import { Header } from "@/components/Header";
+import { BottomNav } from "@/components/BottomNav";
 
 const FALLBACK_CENTER = { latitude: 36.8969, longitude: 30.7133 };
 const HUD_SIDE_GAP = 7;
@@ -46,7 +45,12 @@ export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const mapRef = useRef<MapView>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [shieldPopupOpen, setShieldPopupOpen] = useState(false);
+  const [dailyMissionPopupOpen, setDailyMissionPopupOpen] = useState(false);
+  const [cityMenuOpen, setCityMenuOpen] = useState(false);
+  const [selectedCityScope, setSelectedCityScope] = useState("Antalya");
   const menuAnim = useRef(new Animated.Value(0)).current;
 
   const center = FALLBACK_CENTER;
@@ -144,6 +148,31 @@ export default function MapScreen() {
     []
   );
 
+  const activeShields = useMemo(
+    () => [
+      { id: "shield-1", zone: "Muratpasa - Isiklar", remaining: "01sa 18dk", appliedAt: "Bugun 13:42" },
+      { id: "shield-2", zone: "Konyaalti - Liman", remaining: "00sa 47dk", appliedAt: "Bugun 14:13" },
+      { id: "shield-3", zone: "Kepez - Varsak", remaining: "03sa 05dk", appliedAt: "Bugun 11:55" },
+      { id: "shield-4", zone: "Dosemealti - Yesilbayir", remaining: "00sa 22dk", appliedAt: "Bugun 14:38" },
+    ],
+    []
+  );
+
+  const shieldInventoryCount = 2;
+
+  const weeklyMissionStatus = useMemo(
+    () => [
+      { day: "Pzt", status: "completed" as const },
+      { day: "Sal", status: "completed" as const },
+      { day: "Car", status: "missed" as const },
+      { day: "Per", status: "completed" as const },
+      { day: "Cum", status: "pending" as const },
+      { day: "Cts", status: "pending" as const },
+      { day: "Paz", status: "pending" as const },
+    ],
+    []
+  );
+
   const openMenu = useCallback(() => {
     setMenuOpen(true);
     Animated.timing(menuAnim, {
@@ -170,14 +199,57 @@ export default function MapScreen() {
     outputRange: [-drawerWidth, 0],
   });
 
+  const centerOnUserLocation = useCallback(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      return;
+    }
+
+    const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    mapRef.current?.animateToRegion(
+      {
+        latitude: current.coords.latitude,
+        longitude: current.coords.longitude,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      },
+      500
+    );
+  }, []);
+
+  const handleDrawerMenuPress = useCallback(
+    (key: string) => {
+      closeMenu();
+      if (key === "profile") {
+        router.push(ROUTES.tabs.profile);
+        return;
+      }
+      if (key === "missions") {
+        router.push(ROUTES.tabs.missions);
+        return;
+      }
+      if (key === "settings") {
+        router.push(ROUTES.tabs.settings);
+        return;
+      }
+      if (key === "achievements") {
+        router.push(ROUTES.tabs.leaderboard);
+        return;
+      }
+    },
+    [closeMenu, router]
+  );
+
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
         customMapStyle={darkMapStyle}
         mapType="standard"
         initialRegion={initialRegion}
+        showsUserLocation
         showsCompass={false}
         showsScale={false}
         toolbarEnabled={false}
@@ -200,50 +272,63 @@ export default function MapScreen() {
       </MapView>
 
       <SafeAreaView style={styles.topOverlay} edges={["top"]}>
-        <TopHudBar
+        <Header
           onAvatarPress={openMenu}
           onBellPress={() => router.push(ROUTES.tabs.notifications)}
-          avatarInitials="AL"
-          levelText="24"
-          coinText="2.450"
-          gemText="128"
-          bellCount={3}
         />
       </SafeAreaView>
 
-      <View style={[styles.rightRail, { top: insets.top + 72 }]}>
-        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.map)}>
-          <Crosshair size={25} color="#CCFFF9" />
+      <View style={[styles.rightRail, { top: insets.top + 70 }]}>
+        <Pressable style={styles.railBtn} onPress={centerOnUserLocation}>
+          <Image source={require("../../assets/images/ui/konum.png")} style={styles.railImage} resizeMode="contain" />
         </Pressable>
-        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.missions)}>
-          <Shield size={25} color="#CCFFF9" />
+        <Pressable style={styles.railBtn} onPress={() => setShieldPopupOpen(true)}>
+          <Image source={require("../../assets/images/ui/kalkanikon.png")} style={styles.railImage} resizeMode="contain" />
         </Pressable>
-        <Pressable style={styles.railBtn} onPress={() => router.push(ROUTES.tabs.missions)}>
-          <ClipboardCheck size={24} color="#CCFFF9" />
+        <Pressable style={styles.railBtn} onPress={() => setDailyMissionPopupOpen(true)}>
+          <Image source={require("../../assets/images/ui/gorev.png")} style={styles.railImage} resizeMode="contain" />
         </Pressable>
       </View>
 
       <View pointerEvents="box-none" style={[styles.bottomStack, { paddingBottom: insets.bottom + 116 }]}>
         <View style={styles.statsCard}>
           <View style={styles.cityRow}>
-            <View style={styles.cityLeft}>
-              <Text style={styles.cityTitle}>Antalya</Text>
+            <Pressable style={styles.cityLeft} onPress={() => setCityMenuOpen((prev) => !prev)}>
+              <Text style={styles.cityTitle}>{selectedCityScope}</Text>
               <ChevronDown size={10} color="#10F4E8" />
-            </View>
-            <Pressable onPress={() => router.push(ROUTES.tabs.leaderboard)}>
-              <ChevronRight size={12} color="#A9B4C0" />
             </Pressable>
+
+            {cityMenuOpen ? (
+              <View style={styles.cityDropdown}>
+                {[
+                  { key: "Genel", label: "Genel" },
+                  { key: "Antalya", label: "Antalya" },
+                  { key: "Arkadaslarim", label: "Arkadaşlarım" },
+                ].map((option) => (
+                  <Pressable
+                    key={option.key}
+                    style={styles.cityDropdownItem}
+                    onPress={() => {
+                      setSelectedCityScope(option.label);
+                      setCityMenuOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.cityDropdownText, selectedCityScope === option.label && styles.cityDropdownTextActive]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.statsRow}>
-            <View style={styles.statBlock}>
+            <View style={[styles.statBlock, styles.statBlockRanking]}>
               <Text style={styles.statLabel}>Sıralama</Text>
               <Text style={styles.statValue}># 3</Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.statBlock}>
+            <View style={[styles.statBlock, styles.statBlockArea]}>
               <Text style={styles.statLabel}>Alanım</Text>
-              <Text style={styles.statValue}>12.450 m²</Text>
+              <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>12.450 m²</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBlock}>
@@ -269,16 +354,7 @@ export default function MapScreen() {
         </Pressable>
       </View>
 
-      <BottomTabBar<BottomKey>
-        tabs={tabs}
-        activeKey="map"
-        onTabPress={(key) => {
-          if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
-          if (key === "rewards") router.push(ROUTES.tabs.missions);
-          if (key === "store") router.push(ROUTES.tabs.store);
-        }}
-      />
+      <BottomNav activeTab="map" />
 
       {menuOpen ? (
         <View style={styles.drawerRoot} pointerEvents="box-none">
@@ -286,7 +362,7 @@ export default function MapScreen() {
           <Animated.View style={[styles.drawerPanel, { width: drawerWidth, transform: [{ translateX: drawerTranslateX }] }]}> 
             <SafeAreaView style={styles.drawerSafe} edges={["top", "left", "bottom"]}>
               <View style={styles.drawerHeaderRow}>
-                <Text style={styles.drawerTitle}>ALANGO</Text>
+                <Image source={require("../../assets/images/logoyan.png")} style={styles.drawerBrandIcon} resizeMode="contain" />
                 <Pressable style={styles.drawerCloseBtn} onPress={closeMenu}>
                   <X size={18} color="#D5DFEA" />
                 </Pressable>
@@ -294,11 +370,11 @@ export default function MapScreen() {
 
               <View style={styles.drawerProfileRow}>
                 <View style={styles.drawerAvatar}>
-                  <Text style={styles.drawerAvatarText}>AL</Text>
+                  <Image source={require("../../assets/images/avatars/avatar_pilot.png")} style={styles.drawerAvatarPhoto} resizeMode="cover" />
+                  <Image source={require("../../assets/images/frames/frame_cyan.png")} style={styles.drawerAvatarFrame} resizeMode="contain" />
                 </View>
                 <View style={styles.drawerProfileInfo}>
                   <Text style={styles.drawerName}>CNRman</Text>
-                  <Text style={styles.drawerHandle}>ALANGO</Text>
                 </View>
               </View>
 
@@ -309,7 +385,7 @@ export default function MapScreen() {
 
               <View style={styles.drawerMenuList}>
                 {menuItems.map((item) => (
-                  <Pressable key={item.key} style={styles.drawerMenuItem}>
+                  <Pressable key={item.key} style={styles.drawerMenuItem} onPress={() => handleDrawerMenuPress(item.key)}>
                     <View style={styles.drawerMenuIconWrap}>{item.icon}</View>
                     <View style={styles.drawerMenuTextWrap}>
                       <Text style={styles.drawerMenuTitle}>{item.title}</Text>
@@ -330,6 +406,97 @@ export default function MapScreen() {
               </Pressable>
             </SafeAreaView>
           </Animated.View>
+        </View>
+      ) : null}
+
+      {shieldPopupOpen ? (
+        <View style={styles.shieldPopupRoot} pointerEvents="box-none">
+          <Pressable style={styles.shieldPopupBackdrop} onPress={() => setShieldPopupOpen(false)} />
+
+          <View style={styles.shieldPopupCard}>
+            <View style={styles.shieldPopupHeaderRow}>
+              <View style={styles.shieldPopupTitleWrap}>
+                <Shield size={16} color="#7CEEFF" />
+                <Text style={styles.shieldPopupTitle}>Kalkan Durumu</Text>
+              </View>
+              <Pressable style={styles.shieldPopupCloseBtn} onPress={() => setShieldPopupOpen(false)}>
+                <X size={16} color="#D5DFEA" />
+              </Pressable>
+            </View>
+
+            <View style={styles.shieldCountChip}>
+              <Text style={styles.shieldCountLabel}>Kalan Kalkan</Text>
+              <Text style={styles.shieldCountValue}>{shieldInventoryCount}</Text>
+            </View>
+
+            <Text style={styles.shieldSectionTitle}>Uygulanan Kalkanlar</Text>
+
+            <ScrollView style={styles.shieldList} contentContainerStyle={styles.shieldListContent} showsVerticalScrollIndicator>
+              {activeShields.map((item) => (
+                <View key={item.id} style={styles.shieldRow}>
+                  <View style={styles.shieldRowLeft}>
+                    <Text style={styles.shieldZone}>{item.zone}</Text>
+                    <Text style={styles.shieldApplied}>Uygulama: {item.appliedAt}</Text>
+                  </View>
+                  <View style={styles.shieldRemainingWrap}>
+                    <Text style={styles.shieldRemainingLabel}>Kalan</Text>
+                    <Text style={styles.shieldRemainingValue}>{item.remaining}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      ) : null}
+
+      {dailyMissionPopupOpen ? (
+        <View style={styles.missionPopupRoot} pointerEvents="box-none">
+          <Pressable style={styles.missionPopupBackdrop} onPress={() => setDailyMissionPopupOpen(false)} />
+
+          <View style={styles.missionPopupCard}>
+            <View style={styles.missionPopupHeaderRow}>
+              <Text style={styles.missionPopupTitle}>Gunluk Gorev</Text>
+              <Pressable style={styles.missionPopupCloseBtn} onPress={() => setDailyMissionPopupOpen(false)}>
+                <X size={16} color="#D5DFEA" />
+              </Pressable>
+            </View>
+
+            <View style={styles.missionTodayCard}>
+              <Text style={styles.missionTodayLabel}>Bugunun gorevi</Text>
+              <Text style={styles.missionTodayText}>5.000 m² alan fethet</Text>
+              <Text style={styles.missionTodayMeta}>Ilerleme: 2.350 / 5.000 m²</Text>
+            </View>
+
+            <Text style={styles.missionWeekTitle}>Haftalik durum</Text>
+
+            <ScrollView style={styles.missionWeekList} contentContainerStyle={styles.missionWeekListContent} showsVerticalScrollIndicator>
+              {weeklyMissionStatus.map((item) => {
+                const isCompleted = item.status === "completed";
+                const isMissed = item.status === "missed";
+                const statusText = isCompleted ? "Tamamlandi" : isMissed ? "Unutuldu" : "Tamamlanacak";
+                const statusIcon = isCompleted ? "✓" : isMissed ? "✕" : "○";
+
+                return (
+                  <View key={item.day} style={styles.missionDayRow}>
+                    <Text style={styles.missionDayName}>{item.day}</Text>
+                    <View style={styles.missionDayStatusWrap}>
+                      <Text
+                        style={[
+                          styles.missionDayIcon,
+                          isCompleted && styles.missionDayIconCompleted,
+                          isMissed && styles.missionDayIconMissed,
+                          !isCompleted && !isMissed && styles.missionDayIconPending,
+                        ]}
+                      >
+                        {statusIcon}
+                      </Text>
+                      <Text style={styles.missionDayStatusText}>{statusText}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
       ) : null}
 
@@ -459,7 +626,7 @@ const styles = StyleSheet.create({
   rightRail: {
     position: "absolute",
     right: HUD_SIDE_GAP + 6,
-    gap: 16,
+    gap: 10,
     zIndex: 4,
   },
   railBtn: {
@@ -468,14 +635,11 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.22)",
-    backgroundColor: "rgba(8, 18, 28, 0.88)",
-    shadowColor: "#10F4E8",
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 5,
-    elevation: 4,
+    backgroundColor: "transparent",
+  },
+  railImage: {
+    width: 40,
+    height: 40,
   },
   nodeDot: {
     width: 4,
@@ -521,8 +685,8 @@ const styles = StyleSheet.create({
   cityRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     marginBottom: 7,
+    position: "relative",
   },
   cityLeft: {
     flexDirection: "row",
@@ -534,6 +698,33 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.bold,
     fontSize: 17,
   },
+  cityDropdown: {
+    position: "absolute",
+    left: 0,
+    top: 24,
+    zIndex: 8,
+    minWidth: 132,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.3)",
+    backgroundColor: "rgba(8, 18, 28, 0.98)",
+    overflow: "hidden",
+  },
+  cityDropdownItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(120, 160, 180, 0.14)",
+  },
+  cityDropdownText: {
+    color: "#D8E2EF",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 13,
+  },
+  cityDropdownTextActive: {
+    color: "#10F4E8",
+    fontFamily: theme.typography.fontFamily.semibold,
+  },
   statsRow: {
     flexDirection: "row",
     alignItems: "stretch",
@@ -541,6 +732,12 @@ const styles = StyleSheet.create({
   statBlock: {
     flex: 1,
     gap: 3,
+  },
+  statBlockRanking: {
+    flex: 0.7,
+  },
+  statBlockArea: {
+    flex: 1.3,
   },
   statDivider: {
     width: 1,
@@ -626,12 +823,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginTop: -50,
   },
   drawerTitle: {
     color: "#7CEEFF",
     fontFamily: theme.typography.fontFamily.bold,
     fontSize: 15,
     letterSpacing: 0.4,
+  },
+  drawerBrandIcon: {
+    width: 126,
+    height: 126,
   },
   drawerCloseBtn: {
     width: 34,
@@ -644,25 +846,30 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(8, 18, 28, 0.75)",
   },
   drawerProfileRow: {
-    marginTop: 16,
+    marginTop: -34,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
   drawerAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(16, 244, 232, 0.8)",
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(11, 24, 36, 0.82)",
+    position: "relative",
   },
-  drawerAvatarText: {
-    color: "#FFFFFF",
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 18,
+  drawerAvatarPhoto: {
+    position: "absolute",
+    width: 57,
+    height: 57,
+    borderRadius: 29,
+    zIndex: 1,
+  },
+  drawerAvatarFrame: {
+    width: 68,
+    height: 68,
+    zIndex: 2,
   },
   drawerProfileInfo: {
     flex: 1,
@@ -766,5 +973,242 @@ const styles = StyleSheet.create({
     color: "#FF6D6D",
     fontFamily: theme.typography.fontFamily.semibold,
     fontSize: 16,
+  },
+  shieldPopupRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  shieldPopupBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(1, 6, 12, 0.52)",
+  },
+  shieldPopupCard: {
+    width: "100%",
+    maxWidth: 360,
+    maxHeight: 430,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.32)",
+    backgroundColor: "rgba(1, 12, 22, 0.96)",
+    padding: 12,
+    gap: 10,
+  },
+  shieldPopupHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  shieldPopupTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  shieldPopupTitle: {
+    color: "#F6FBFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
+  },
+  shieldPopupCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.26)",
+    backgroundColor: "rgba(8, 18, 28, 0.75)",
+  },
+  shieldCountChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "rgba(124, 238, 255, 0.4)",
+    backgroundColor: "rgba(24, 54, 78, 0.4)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  shieldCountLabel: {
+    color: "#BFD0E0",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
+  },
+  shieldCountValue: {
+    color: "#7CEEFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 20,
+  },
+  shieldSectionTitle: {
+    color: "#E8F3FF",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 14,
+  },
+  shieldList: {
+    maxHeight: 280,
+  },
+  shieldListContent: {
+    gap: 8,
+    paddingBottom: 4,
+  },
+  shieldRow: {
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.78)",
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  shieldRowLeft: {
+    flex: 1,
+    gap: 3,
+  },
+  shieldZone: {
+    color: "#F1F8FF",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  shieldApplied: {
+    color: "#97A8BA",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 11,
+  },
+  shieldRemainingWrap: {
+    alignItems: "flex-end",
+    gap: 1,
+  },
+  shieldRemainingLabel: {
+    color: "#97A8BA",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 10,
+  },
+  shieldRemainingValue: {
+    color: "#56F2C8",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 13,
+  },
+  missionPopupRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 29,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  missionPopupBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(1, 6, 12, 0.52)",
+  },
+  missionPopupCard: {
+    width: "100%",
+    maxWidth: 360,
+    maxHeight: 430,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.32)",
+    backgroundColor: "rgba(1, 12, 22, 0.96)",
+    padding: 12,
+    gap: 10,
+  },
+  missionPopupHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  missionPopupTitle: {
+    color: "#F6FBFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
+  },
+  missionPopupCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.26)",
+    backgroundColor: "rgba(8, 18, 28, 0.75)",
+  },
+  missionTodayCard: {
+    borderWidth: 1,
+    borderColor: "rgba(124, 238, 255, 0.4)",
+    backgroundColor: "rgba(24, 54, 78, 0.4)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 4,
+  },
+  missionTodayLabel: {
+    color: "#BFD0E0",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 11,
+  },
+  missionTodayText: {
+    color: "#E8F8FF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 14,
+  },
+  missionTodayMeta: {
+    color: "#82E6F7",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
+  },
+  missionWeekTitle: {
+    color: "#E8F3FF",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 14,
+  },
+  missionWeekList: {
+    maxHeight: 245,
+  },
+  missionWeekListContent: {
+    gap: 8,
+    paddingBottom: 4,
+  },
+  missionDayRow: {
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.78)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  missionDayName: {
+    color: "#F1F8FF",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  missionDayStatusWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  missionDayIcon: {
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 13,
+  },
+  missionDayIconCompleted: {
+    color: "#56F2C8",
+  },
+  missionDayIconMissed: {
+    color: "#FF7C7C",
+  },
+  missionDayIconPending: {
+    color: "#FACC15",
+  },
+  missionDayStatusText: {
+    color: "#C9D6E3",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
   },
 });

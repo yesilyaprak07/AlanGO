@@ -126,7 +126,7 @@ export default function SignInScreen() {
 
             <Animated.View style={[styles.legalWrap, legalAnim.style]}>
               <Text style={styles.legalText}>
-                Devam ederek, <Text style={styles.legalLink}>Kullanım Koşulları</Text> ve <Text style={styles.legalLink}>Gizlilik Politikası</Text>'nı kabul etmiş olursunuz.
+                Devam ederek, <Text style={styles.legalLink}>Kullanım Koşulları</Text> ve <Text style={styles.legalLink}>Gizlilik Politikası</Text>&apos;nı kabul etmiş olursunuz.
               </Text>
             </Animated.View>
           </ScrollView>

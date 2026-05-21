@@ -18,7 +18,6 @@ import {
 import {
   AlanGoLogo,
   AvatarPlaceholder,
-  BottomTabBar,
   GlassCard,
   HelperText,
   IntensitySliderPlaceholder,
@@ -26,6 +25,7 @@ import {
   SettingRow,
   SoonBadge,
 } from "@/components/ui";
+import { BottomNav } from "@/components/BottomNav";
 import { AmbientGlow } from "@/components/fx";
 import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
@@ -116,15 +116,6 @@ export default function SettingsScreen() {
 
         <GlassCard contentStyle={styles.sectionContent}>
           <Text style={styles.sectionTitle}>Hesap</Text>
-          <SettingRow
-            title="Profil Duzenle"
-            subtitle="Kullanici bilgilerini guncelle"
-            icon={<User size={15} color={theme.colors.primaryCyan} />}
-            onPress={() => {
-              // TODO: Open profile editing screen.
-            }}
-          />
-          <Divider />
           <SettingRow
             title="Premium Yonetimi"
             subtitle="Paketini ve odeme durumunu gor"
@@ -245,18 +236,7 @@ export default function SettingsScreen() {
 
       </ScrollView>
 
-      <BottomTabBar<BottomKey>
-        tabs={bottomTabs}
-        activeKey="profile"
-        onTabPress={(key) => {
-          if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "missions") router.push(ROUTES.tabs.missions);
-          if (key === "feed") router.push(ROUTES.tabs.feed);
-          if (key === "notifications") router.push(ROUTES.tabs.notifications);
-          if (key === "profile") router.push(ROUTES.tabs.profile);
-        }}
-        style={styles.bottomTabs}
-      />
+      <BottomNav activeTab="store" style={styles.bottomTabs} />
     </SafeAreaView>
   );
 }

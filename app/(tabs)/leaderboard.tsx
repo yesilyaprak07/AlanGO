@@ -1,218 +1,204 @@
-import { useMemo } from "react";
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  Bell,
-  ChevronDown,
-  ChevronRight,
-  Crown,
-  Gift,
-  Globe,
-  Map,
-  Shield,
-  ShoppingCart,
-  Trophy,
-  Users,
-  Building2,
-  Gem,
-  Plus,
-} from "lucide-react-native";
-import { BottomTabBar } from "@/components/ui";
+import { Building2, ChevronDown, ChevronRight, Clock3, Crown, Globe, Shield, Users } from "lucide-react-native";
+import { BottomNav } from "@/components/BottomNav";
+import { Header } from "@/components/Header";
 import { ROUTES } from "@/constants/routes";
 import { theme } from "@/constants/theme";
+type SekmeKey = "genel" | "sehrim" | "arkadaslarim" | "klanlar";
 
-type BottomKey = "map" | "leaderboard" | "rewards" | "store";
-
-type RankItem = {
-  rank: number;
+type PodiumPlayer = {
+  rank: 1 | 2 | 3;
   name: string;
   city: string;
   area: string;
   level: number;
-  highlight?: boolean;
+  avatar: number;
 };
 
-const ranking: RankItem[] = [
-  { rank: 4, name: "CNRman (Sen)", city: "Antalya", area: "72.540 m2", level: 19, highlight: true },
-  { rank: 5, name: "VioletStorm", city: "Bursa", area: "65.230 m2", level: 18 },
-  { rank: 6, name: "RoadRunner", city: "Konya", area: "61.080 m2", level: 18 },
-  { rank: 7, name: "MetroKing", city: "Adana", area: "58.310 m2", level: 17 },
-  { rank: 8, name: "SkyLine", city: "Gaziantep", area: "52.470 m2", level: 16 },
-  { rank: 9, name: "GreenArrow", city: "Samsun", area: "49.860 m2", level: 16 },
-  { rank: 10, name: "NightHawk", city: "Trabzon", area: "47.320 m2", level: 15 },
+type SiralamaItem = {
+  sira: number;
+  isim: string;
+  sehir: string;
+  m2: string;
+  sv: number;
+  avatar: number;
+  ben: boolean;
+};
+
+const PODIUM_PLAYERS: PodiumPlayer[] = [
+  {
+    rank: 2,
+    name: "NeonQueen",
+    city: "Ankara",
+    area: "98.750 m²",
+    level: 22,
+    avatar: require("../../assets/images/avatars/avatar_pilot.png"),
+  },
+  {
+    rank: 1,
+    name: "ShadowWalker",
+    city: "İstanbul",
+    area: "125.430 m²",
+    level: 24,
+    avatar: require("../../assets/images/avatars/avatar_rookie.png"),
+  },
+  {
+    rank: 3,
+    name: "ZoneMaster",
+    city: "İzmir",
+    area: "87.160 m²",
+    level: 20,
+    avatar: require("../../assets/images/avatars/avatar_sniper.png"),
+  },
 ];
 
-function avatarColors(rank: number) {
-  if (rank === 4) return { ring: "#4DDCFF", fill: "rgba(77, 220, 255, 0.2)" };
-  if (rank % 3 === 0) return { ring: "#FFB83A", fill: "rgba(255, 184, 58, 0.2)" };
-  if (rank % 2 === 0) return { ring: "#A98BFF", fill: "rgba(169, 139, 255, 0.22)" };
-  return { ring: "#8EF3A1", fill: "rgba(142, 243, 161, 0.2)" };
+const SIRALAMA: SiralamaItem[] = [
+  { sira: 4, isim: "CNRman (Sen)", sehir: "Antalya", m2: "72.540", sv: 19, avatar: require("../../assets/images/avatars/avatar_sniper.png"), ben: true },
+  { sira: 5, isim: "VioletStorm", sehir: "Bursa", m2: "65.230", sv: 18, avatar: require("../../assets/images/avatars/avatar_rookie.png"), ben: false },
+  { sira: 6, isim: "RoadRunner", sehir: "Konya", m2: "61.080", sv: 18, avatar: require("../../assets/images/avatars/avatar_soldier.png"), ben: false },
+  { sira: 7, isim: "MetroKing", sehir: "Adana", m2: "58.310", sv: 17, avatar: require("../../assets/images/avatars/avatar_elite.png"), ben: false },
+  { sira: 8, isim: "SkyLine", sehir: "Gaziantep", m2: "52.470", sv: 16, avatar: require("../../assets/images/avatars/avatar_pilot.png"), ben: false },
+  { sira: 9, isim: "GreenArrow", sehir: "Samsun", m2: "49.860", sv: 16, avatar: require("../../assets/images/avatars/avatar_rookie.png"), ben: false },
+  { sira: 10, isim: "NightHawk", sehir: "Trabzon", m2: "47.320", sv: 15, avatar: require("../../assets/images/avatars/avatar_sniper.png"), ben: false },
+];
+
+const LEADERBOARD_SEKMELERI: { key: SekmeKey; label: string; icon: typeof Globe }[] = [
+  { key: "genel", label: "Genel", icon: Globe },
+  { key: "sehrim", label: "Sehrim", icon: Building2 },
+  { key: "arkadaslarim", label: "Arkadaslarim", icon: Users },
+  { key: "klanlar", label: "Klanlar", icon: Shield },
+];
+
+function podiumTone(rank: 1 | 2 | 3) {
+  if (rank === 1) {
+    return { crown: "#FFD700", area: "#FFD700", ring: "#FFD700" };
+  }
+  if (rank === 2) {
+    return { crown: "#C0C0C0", area: "#4FC3F7", ring: "#4FC3F7" };
+  }
+  return { crown: "#CD7F32", area: "#FF8A50", ring: "#FF8A50" };
 }
 
 export default function LeaderboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-
-  const bottomTabs = useMemo(
-    () => [
-      { key: "map" as const, label: "Harita", icon: <Map size={12} color="#A9B4C0" /> },
-      { key: "leaderboard" as const, label: "Liderlik", icon: <Trophy size={12} color="#10F4E8" /> },
-      { key: "rewards" as const, label: "Oduller", icon: <Gift size={12} color="#A9B4C0" />, badgeCount: 1 },
-      { key: "store" as const, label: "Dukkan", icon: <ShoppingCart size={12} color="#A9B4C0" /> },
-    ],
-    []
-  );
+  const [aktifSekme, setAktifSekme] = useState<SekmeKey>("genel");
 
   return (
     <ImageBackground source={require("../../assets/images/backbos.png")} style={styles.backgroundImage} resizeMode="cover">
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 128 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.topHudRow}>
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatarCore}>
-              <Text style={styles.avatarText}>AL</Text>
-            </View>
-            <View style={styles.levelChip}>
-              <Text style={styles.levelText}>24</Text>
-            </View>
-          </View>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 128 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Header
+            style={styles.headerAdjust}
+            onAvatarPress={() => router.push(ROUTES.tabs.profile)}
+            onBellPress={() => router.push(ROUTES.tabs.notifications)}
+          />
 
-          <View style={styles.balancePill}>
-            <View style={styles.coinIcon} />
-            <Text style={styles.balanceText}>2.450</Text>
-            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
-          </View>
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>LIDERLIK</Text>
 
-          <View style={styles.balancePill}>
-            <Gem size={20} color="#7F9CFF" fill="#7F9CFF" />
-            <Text style={styles.balanceText}>128</Text>
-            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
-          </View>
-
-          <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
-            <Bell size={25} color="#FFFFFF" />
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>3</Text>
-            </View>
-          </Pressable>
-        </View>
-
-        <View style={styles.scaledContentWrap}>
-          <View style={styles.scaledContent}>
-            <Text style={styles.title}>LIDERLIK</Text>
-
-            <View style={styles.seasonRow}>
+            <View style={styles.seasonBlock}>
               <Pressable style={styles.seasonPill}>
                 <Text style={styles.seasonPillText}>Sezon 1</Text>
-                <ChevronDown size={14} color="#A9B4C0" />
+                <ChevronDown size={13} color="#AEB9C6" />
               </Pressable>
-              <Text style={styles.seasonTime}>Sezon bitimine: 22g 14s 32d</Text>
-            </View>
 
-            <View style={styles.scopeTabs}>
-              <Pressable style={[styles.scopeTab, styles.scopeTabActive]}>
-                <Globe size={15} color="#10F4E8" />
-                <Text style={[styles.scopeTabText, styles.scopeTabTextActive]}>Genel</Text>
-              </Pressable>
-              <Pressable style={styles.scopeTab}>
-                <Building2 size={15} color="#7E8C9B" />
-                <Text style={styles.scopeTabText}>Sehrim</Text>
-              </Pressable>
-              <Pressable style={styles.scopeTab}>
-                <Users size={15} color="#7E8C9B" />
-                <Text style={styles.scopeTabText}>Arkadaslar</Text>
-              </Pressable>
-              <Pressable style={styles.scopeTab}>
-                <Shield size={15} color="#7E8C9B" />
-                <Text style={styles.scopeTabText}>Klanlar</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.podiumCard}>
-              <View style={styles.podiumInner}>
-                <View style={styles.podiumSideCol}>
-                  <View style={[styles.podiumAvatar, styles.podiumAvatarSilver]}>
-                    <Crown size={14} color="#BBD4FF" />
-                  </View>
-                  <Text style={styles.podiumName}>NeonQueen</Text>
-                  <Text style={styles.podiumCity}>Ankara</Text>
-                  <Text style={[styles.podiumArea, styles.podiumAreaBlue]}>98.750 m2</Text>
-                  <View style={[styles.podiumBase, styles.podiumBaseBlue]}>
-                    <Text style={styles.podiumRank}>2</Text>
-                  </View>
-                </View>
-
-                <View style={styles.podiumCenterCol}>
-                  <View style={[styles.podiumAvatar, styles.podiumAvatarGold]}>
-                    <Crown size={16} color="#FFD25B" />
-                  </View>
-                  <Text style={styles.podiumName}>ShadowWalker</Text>
-                  <Text style={styles.podiumCity}>Istanbul</Text>
-                  <Text style={[styles.podiumArea, styles.podiumAreaGold]}>125.430 m2</Text>
-                  <View style={[styles.podiumBase, styles.podiumBaseGold]}>
-                    <Text style={styles.podiumRank}>1</Text>
-                  </View>
-                </View>
-
-                <View style={styles.podiumSideCol}>
-                  <View style={[styles.podiumAvatar, styles.podiumAvatarBronze]}>
-                    <Crown size={14} color="#FFBE75" />
-                  </View>
-                  <Text style={styles.podiumName}>ZoneMaster</Text>
-                  <Text style={styles.podiumCity}>Izmir</Text>
-                  <Text style={[styles.podiumArea, styles.podiumAreaBronze]}>87.160 m2</Text>
-                  <View style={[styles.podiumBase, styles.podiumBaseBronze]}>
-                    <Text style={styles.podiumRank}>3</Text>
-                  </View>
-                </View>
+              <View style={styles.seasonTimeRow}>
+                <Clock3 size={12} color="#7F8FA1" />
+                <Text style={styles.seasonTimeText}>Sezon bitimine: 22g 14s 32d</Text>
               </View>
             </View>
+          </View>
 
-            <View style={styles.listWrap}>
-              {ranking.map((item) => {
-                const colors = avatarColors(item.rank);
+          <View style={styles.sekmeRow}>
+            {LEADERBOARD_SEKMELERI.map((sekme) => {
+              const aktif = aktifSekme === sekme.key;
+              const Icon = sekme.icon;
+
+              return (
+                <Pressable
+                  key={sekme.key}
+                  onPress={() => setAktifSekme(sekme.key)}
+                  style={[styles.sekmeButon, aktif && styles.sekmeButonAktif]}
+                >
+                  <Icon size={13} color={aktif ? "#10F4E8" : "#8D9AA8"} />
+                  <Text style={[styles.sekmeYazi, aktif && styles.sekmeYaziAktif]}>{sekme.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.podiumCard}>
+            <View style={styles.playerRow}>
+              {PODIUM_PLAYERS.map((player) => {
+                const tone = podiumTone(player.rank);
+                const isFirst = player.rank === 1;
                 return (
-                  <Pressable key={item.rank} style={[styles.rankRow, item.highlight && styles.rankRowHighlight]}>
-                    <Text style={[styles.rankIndex, item.highlight && styles.rankIndexHighlight]}>{item.rank}</Text>
+                  <View key={player.rank} style={[styles.playerCol, isFirst && styles.playerColFirst]}>
+                    <Crown size={14} color={tone.crown} />
 
-                    <View style={[styles.rowAvatar, { borderColor: colors.ring, backgroundColor: colors.fill }]}>
-                      <Text style={styles.rowAvatarText}>{item.name.slice(0, 2).toUpperCase()}</Text>
-                      <View style={styles.rowLevelBadge}>
-                        <Text style={styles.rowLevelText}>{item.level}</Text>
+                    <View style={[styles.avatarWrapPodium, { width: isFirst ? 64 : 56, height: isFirst ? 64 : 56, borderRadius: isFirst ? 32 : 28, borderColor: tone.ring }]}>
+                      <Image source={player.avatar} style={styles.playerAvatarImage} resizeMode="cover" />
+                      <View style={styles.levelBadge}>
+                        <Text style={styles.levelBadgeText}>{player.level}</Text>
                       </View>
                     </View>
 
-                    <View style={styles.rowMeta}>
-                      <Text style={[styles.rowName, item.highlight && styles.rowNameHighlight]}>{item.name}</Text>
-                      <Text style={styles.rowCity}>{item.city}</Text>
-                    </View>
-
-                    <Text style={styles.rowArea}>{item.area}</Text>
-                    <ChevronRight size={18} color="#8D9AA8" />
-                  </Pressable>
+                    <Text style={styles.playerName}>{player.name}</Text>
+                    <Text style={styles.playerCity}>{player.city}</Text>
+                    <Text style={[styles.playerArea, { color: tone.area }]}>{player.area}</Text>
+                  </View>
                 );
               })}
             </View>
-          </View>
-        </View>
-      </ScrollView>
 
-      <BottomTabBar<BottomKey>
-        tabs={bottomTabs}
-        activeKey="leaderboard"
-        onTabPress={(key) => {
-          if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "leaderboard") router.push(ROUTES.tabs.leaderboard);
-          if (key === "rewards") router.push(ROUTES.tabs.missions);
-          if (key === "store") router.push(ROUTES.tabs.store);
-        }}
-      />
-    </SafeAreaView>
+            <View style={styles.podiumBaseWrap}>
+              <Image source={require("../../assets/images/podiums/kursu.png")} style={styles.podiumBaseImage} resizeMode="contain" />
+              <Text style={styles.podiumRankLeft}>2</Text>
+              <Text style={styles.podiumRankCenter}>1</Text>
+              <Text style={styles.podiumRankRight}>3</Text>
+            </View>
+          </View>
+
+          <View style={styles.siralamaWrap}>
+            {SIRALAMA.map((item) => (
+              <Pressable key={item.sira} style={[styles.siraSatir, item.ben && styles.siraSatirBen]}>
+                <Text style={[styles.siraNo, item.ben && styles.siraNoBen]}>{item.sira}</Text>
+
+                <View style={[styles.siraAvatarWrap, item.ben && styles.siraAvatarWrapBen]}>
+                  <Image source={item.avatar} style={styles.siraAvatar} resizeMode="cover" />
+                  <View style={styles.siraSeviyeRozet}>
+                    <Text style={styles.siraSeviyeText}>{item.sv}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.siraMeta}>
+                  <Text style={[styles.siraIsim, item.ben && styles.siraIsimBen]} numberOfLines={1}>
+                    {item.isim}
+                  </Text>
+                  <Text style={styles.siraSehir}>{item.sehir}</Text>
+                </View>
+
+                <Text style={styles.siraAlan}>
+                  {item.m2}
+                  <Text style={styles.siraAlanBirimi}> m²</Text>
+                </Text>
+
+                <ChevronRight size={16} color="#8D9AA8" />
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+
+        <BottomNav activeTab="leaderboard" />
+      </SafeAreaView>
     </ImageBackground>
   );
 }
@@ -233,369 +219,285 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     gap: 10,
   },
-  topHudRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 1,
-  },
-  avatarWrap: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    borderWidth: 1.5,
-    borderColor: "rgba(16, 244, 232, 0.85)",
-    backgroundColor: "rgba(8, 18, 28, 0.65)",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#10F4E8",
-    shadowOpacity: 0.42,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  avatarCore: {
-    width: 55,
-    height: 55,
-    borderRadius: 28,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: "#FFFFFF",
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 19,
-  },
-  levelChip: {
-    position: "absolute",
-    right: -6,
-    bottom: -5,
-    minWidth: 28,
-    height: 28,
-    borderRadius: 11,
-    backgroundColor: "rgba(8, 18, 28, 0.96)",
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.42)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  levelText: {
-    color: "#FFFFFF",
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 16,
-  },
-  balancePill: {
-    width: 109,
-    height: 42,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.22)",
-    backgroundColor: "rgba(8, 18, 28, 0.88)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  coinIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#FFC83D",
-    borderWidth: 1,
-    borderColor: "#FFE08E",
-  },
-  balanceText: {
-    color: "#FFFFFF",
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 16,
-  },
-  bellButton: {
-    width: 55,
-    height: 55,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.22)",
-    backgroundColor: "rgba(8, 18, 28, 0.88)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bellBadge: {
-    position: "absolute",
-    right: -4,
-    top: -4,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#10F4E8",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  bellBadgeText: {
-    color: "#043038",
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 12,
-  },
-  scaledContentWrap: {
-    marginTop: -150,
-    paddingHorizontal: 12,
-    alignSelf: "stretch",
-  },
-  scaledContent: {
-    width: "142.857%",
-    transform: [{ scale: 0.7 }],
-    alignSelf: "center",
-  },
-  title: {
-    color: "#FFFFFF",
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 46,
-    letterSpacing: 0.5,
+  headerAdjust: {
+    marginHorizontal: -10,
     marginTop: 2,
   },
-  seasonRow: {
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginTop: 2,
+  },
+  headerTitle: {
+    color: "#FFFFFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 28,
+    lineHeight: 32,
+  },
+  seasonBlock: {
+    alignItems: "flex-end",
+    gap: 5,
+  },
+  seasonPill: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.26)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  seasonPillText: {
+    color: "#ECF2F9",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
+  seasonTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  seasonTimeText: {
+    color: "#7F8FA1",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
+  },
+  sekmeRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 7,
   },
-  seasonPill: {
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.24)",
-    backgroundColor: "rgba(8, 18, 28, 0.88)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 15,
-    gap: 8,
-  },
-  seasonPillText: {
-    color: "#E3EAF3",
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 28,
-    lineHeight: 28,
-  },
-  seasonTime: {
-    color: "#7EEBFF",
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: 17,
-  },
-  scopeTabs: {
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.24)",
-    backgroundColor: "rgba(8, 18, 28, 0.88)",
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 4,
-    gap: 3,
-  },
-  scopeTab: {
-    height: 50,
+  sekmeButon: {
     flex: 1,
-    borderRadius: 24,
+    minHeight: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    backgroundColor: "rgba(8, 18, 28, 0.88)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
   },
-  scopeTabActive: {
-    backgroundColor: "rgba(16, 244, 232, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(16, 244, 232, 0.45)",
+  sekmeButonAktif: {
+    borderColor: "rgba(16, 244, 232, 0.52)",
+    backgroundColor: "rgba(16, 244, 232, 0.1)",
   },
-  scopeTabText: {
-    color: "#7E8C9B",
+  sekmeYazi: {
+    color: "#8D9AA8",
     fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 24,
-    lineHeight: 24,
+    fontSize: 11,
   },
-  scopeTabTextActive: {
+  sekmeYaziAktif: {
     color: "#10F4E8",
   },
   podiumCard: {
-    borderRadius: 20,
+    width: "100%",
+    borderRadius: 16,
+    padding: 16,
+    position: "relative",
+    backgroundColor: "rgba(6, 14, 26, 0.94)",
     borderWidth: 1,
-    borderColor: "rgba(80, 120, 190, 0.35)",
-    backgroundColor: "rgba(10, 19, 39, 0.92)",
+    borderColor: "rgba(120, 160, 180, 0.25)",
     overflow: "hidden",
-    minHeight: 330,
-    justifyContent: "flex-end",
   },
-  podiumInner: {
+  playerRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-  },
-  podiumSideCol: {
-    width: "31%",
-    alignItems: "center",
-  },
-  podiumCenterCol: {
-    width: "36%",
-    alignItems: "center",
-  },
-  podiumAvatar: {
-    width: 98,
-    height: 98,
-    borderRadius: 49,
-    borderWidth: 2,
-    alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6,
-  },
-  podiumAvatarSilver: {
-    borderColor: "#9FD0FF",
-    backgroundColor: "rgba(159, 208, 255, 0.11)",
-  },
-  podiumAvatarGold: {
-    width: 124,
-    height: 124,
-    borderRadius: 62,
-    borderColor: "#FFD25B",
-    backgroundColor: "rgba(255, 210, 91, 0.12)",
-  },
-  podiumAvatarBronze: {
-    borderColor: "#FFAD64",
-    backgroundColor: "rgba(255, 173, 100, 0.12)",
-  },
-  podiumName: {
-    color: "#F2F6FB",
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 16,
-  },
-  podiumCity: {
-    color: "#A7B3C2",
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: 12,
-  },
-  podiumArea: {
-    marginTop: 2,
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 33,
-    lineHeight: 33,
-  },
-  podiumAreaBlue: {
-    color: "#6CEFFF",
-  },
-  podiumAreaGold: {
-    color: "#FFD25B",
-  },
-  podiumAreaBronze: {
-    color: "#FFAD64",
-  },
-  podiumBase: {
-    marginTop: 8,
-    width: "100%",
-    borderRadius: 99,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  podiumBaseBlue: {
-    height: 56,
-    borderColor: "rgba(108, 239, 255, 0.55)",
-    backgroundColor: "rgba(108, 239, 255, 0.12)",
-  },
-  podiumBaseGold: {
-    height: 74,
-    borderColor: "rgba(255, 210, 91, 0.6)",
-    backgroundColor: "rgba(255, 210, 91, 0.15)",
-  },
-  podiumBaseBronze: {
-    height: 50,
-    borderColor: "rgba(255, 173, 100, 0.58)",
-    backgroundColor: "rgba(255, 173, 100, 0.15)",
-  },
-  podiumRank: {
-    color: "#F2F6FB",
-    fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 26,
-  },
-  listWrap: {
-    gap: 6,
-  },
-  rankRow: {
-    minHeight: 78,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.22)",
-    backgroundColor: "rgba(8, 18, 28, 0.88)",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
     gap: 10,
+    marginBottom: 2,
   },
-  rankRowHighlight: {
-    borderColor: "rgba(16, 244, 232, 0.56)",
-    backgroundColor: "rgba(16, 244, 232, 0.08)",
+  playerCol: {
+    width: "30%",
+    alignItems: "center",
+    gap: 3,
   },
-  rankIndex: {
-    width: 28,
-    color: "#AEB9C6",
+  playerColFirst: {
+    marginBottom: 18,
+  },
+  avatarWrapPodium: {
+    marginTop: 2,
+    borderWidth: 2,
+    overflow: "visible",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playerAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 99,
+  },
+  levelBadge: {
+    position: "absolute",
+    right: -3,
+    top: -3,
+    minWidth: 19,
+    height: 19,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255, 214, 102, 0.75)",
+    backgroundColor: "rgba(8, 18, 28, 0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  levelBadgeText: {
+    color: "#FFD85A",
     fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 38,
-    lineHeight: 38,
+    fontSize: 10,
+  },
+  playerName: {
+    color: "#F2F6FB",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 13,
     textAlign: "center",
   },
-  rankIndexHighlight: {
-    color: "#6CEFFF",
+  playerCity: {
+    color: "#9FB0C2",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
+    textAlign: "center",
   },
-  rowAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1.3,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rowAvatarText: {
-    color: "#FFFFFF",
+  playerArea: {
     fontFamily: theme.typography.fontFamily.bold,
     fontSize: 15,
+    textAlign: "center",
   },
-  rowLevelBadge: {
+  podiumBaseWrap: {
+    width: "100%",
+    maxWidth: "100%",
+    alignSelf: "stretch",
+    overflow: "hidden",
+    marginTop: -30,
+    position: "relative",
+  },
+  podiumBaseImage: {
+    width: "100%",
+    maxWidth: "100%",
+    aspectRatio: 1000 / 296,
+    height: undefined,
+  },
+  podiumRankLeft: {
     position: "absolute",
-    right: -2,
-    top: -2,
+    left: "17%",
+    bottom: "8%",
+    color: "#4FC3F7",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 22,
+    textAlign: "center",
+  },
+  podiumRankCenter: {
+    position: "absolute",
+    left: "50%",
+    bottom: "19%",
+    marginLeft: -8,
+    color: "#FFD700",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 26,
+    textAlign: "center",
+  },
+  podiumRankRight: {
+    position: "absolute",
+    right: "17%",
+    bottom: "8%",
+    color: "#FF8A50",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 22,
+    textAlign: "center",
+  },
+  siralamaWrap: {
+    marginTop: 2,
+  },
+  siraSatir: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    backgroundColor: "rgba(8, 18, 28, 0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.22)",
+    padding: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  siraSatirBen: {
+    borderColor: "rgba(16, 244, 232, 0.62)",
+    backgroundColor: "rgba(16, 244, 232, 0.09)",
+  },
+  siraNo: {
+    width: 30,
+    color: "#AEB9C6",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 18,
+    textAlign: "center",
+  },
+  siraNoBen: {
+    color: "#10F4E8",
+  },
+  siraAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.2,
+    borderColor: "rgba(120, 160, 180, 0.45)",
+    backgroundColor: "rgba(120, 160, 180, 0.12)",
+  },
+  siraAvatarWrapBen: {
+    borderColor: "#10F4E8",
+  },
+  siraAvatar: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 22,
+  },
+  siraSeviyeRozet: {
+    position: "absolute",
+    right: -3,
+    top: -3,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: "rgba(255, 187, 82, 0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 214, 102, 0.75)",
+    backgroundColor: "rgba(8, 18, 28, 0.95)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 3,
   },
-  rowLevelText: {
-    color: "#1C232B",
+  siraSeviyeText: {
+    color: "#FFD85A",
     fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 10,
+    fontSize: 9,
   },
-  rowMeta: {
+  siraMeta: {
     flex: 1,
-    gap: 1,
+    alignItems: "flex-start",
   },
-  rowName: {
-    color: "#F1F5FB",
+  siraIsim: {
+    color: "#F2F6FB",
     fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 17,
+    fontSize: 15,
   },
-  rowNameHighlight: {
-    color: "#6CEFFF",
+  siraIsimBen: {
+    color: "#10F4E8",
   },
-  rowCity: {
-    color: "#A6B2C0",
+  siraSehir: {
+    color: "#9FB0C2",
     fontFamily: theme.typography.fontFamily.medium,
     fontSize: 12,
   },
-  rowArea: {
-    color: "#62EEFF",
+  siraAlan: {
+    color: "#10F4E8",
     fontFamily: theme.typography.fontFamily.bold,
-    fontSize: 18,
+    fontSize: 15,
+  },
+  siraAlanBirimi: {
+    color: "#10F4E8",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 12,
   },
 });

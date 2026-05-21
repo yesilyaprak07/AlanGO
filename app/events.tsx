@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Bell, CalendarDays, Map as MapIcon, ShoppingBag, Target, User, Zap } from "lucide-react-native";
 import {
-  BottomTabBar,
   EmptyState,
   EventCard,
   GlassCard,
@@ -12,6 +11,7 @@ import {
   NeonButton,
   SegmentedSelector,
 } from "@/components/ui";
+import { BottomNav } from "@/components/BottomNav";
 import { AmbientGlow } from "@/components/fx";
 import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
@@ -149,18 +149,7 @@ export default function EventsScreen() {
 
       </ScrollView>
 
-      <BottomTabBar<BottomKey>
-        tabs={bottomTabs}
-        activeKey="missions"
-        onTabPress={(key) => {
-          if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "missions") router.push(ROUTES.tabs.missions);
-          if (key === "feed") router.push(ROUTES.tabs.feed);
-          if (key === "notifications") router.push(ROUTES.tabs.notifications);
-          if (key === "profile") router.push(ROUTES.tabs.profile);
-        }}
-        style={styles.bottomTabs}
-      />
+      <BottomNav activeTab="rewards" style={styles.bottomTabs} />
     </SafeAreaView>
   );
 }

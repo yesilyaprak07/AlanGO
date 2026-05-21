@@ -17,13 +17,13 @@ import {
 } from "lucide-react-native";
 import {
   AlanGoLogo,
-  BottomTabBar,
   EmptyRadarState,
   GlassCard,
   HelperText,
   NotificationCard,
   SegmentedSelector,
 } from "@/components/ui";
+import { BottomNav } from "@/components/BottomNav";
 import { AmbientGlow } from "@/components/fx";
 import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
@@ -205,18 +205,7 @@ export default function NotificationsScreen() {
 
       </ScrollView>
 
-      <BottomTabBar<BottomKey>
-        tabs={bottomTabs}
-        activeKey="notifications"
-        onTabPress={(key) => {
-          if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "missions") router.push(ROUTES.tabs.missions);
-          if (key === "feed") router.push(ROUTES.tabs.feed);
-          if (key === "notifications") return;
-          if (key === "profile") router.push(ROUTES.tabs.profile);
-        }}
-        style={styles.bottomTabs}
-      />
+      <BottomNav activeTab="rewards" style={styles.bottomTabs} />
     </SafeAreaView>
   );
 }

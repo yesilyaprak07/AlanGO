@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-na
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  Bell,
   Crown,
   Flag,
   Footprints,
@@ -11,9 +10,8 @@ import {
   Gift,
   Map,
   Pause,
-  Plus,
-  Shield,
   ShoppingCart,
+  Shield,
   Square,
   Timer,
   Trophy,
@@ -24,7 +22,8 @@ import { useGameStore, computePolygonArea } from "@/stores/gameStore";
 import { darkMapStyle } from "@/constants/mapStyles";
 import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
-import { BottomTabBar } from "@/components/ui";
+import { BottomNav } from "@/components/BottomNav";
+import { Header } from "@/components/Header";
 
 const FALLBACK = { latitude: 36.8969, longitude: 30.7133 };
 const CLOSE_DISTANCE_THRESHOLD = 30;
@@ -304,35 +303,7 @@ export default function ActiveGameScreen() {
       </MapView>
 
       <SafeAreaView style={styles.topWrap} edges={["top"]}>
-        <View style={styles.topHudRow}>
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatarCore}>
-              <Text style={styles.avatarText}>AL</Text>
-            </View>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>19</Text>
-            </View>
-          </View>
-
-          <View style={styles.balancePill}>
-            <View style={styles.coinDot} />
-            <Text style={styles.balanceText}>133.141</Text>
-            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
-          </View>
-
-          <View style={styles.balancePill}>
-            <Gem size={20} color="#7F9CFF" fill="#7F9CFF" />
-            <Text style={styles.balanceText}>38</Text>
-            <Plus size={22} color="#10F4E8" strokeWidth={1.5} />
-          </View>
-
-          <Pressable style={styles.bellButton} onPress={() => router.push(ROUTES.tabs.notifications)}>
-            <Bell size={25} color="#FFFFFF" />
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>3</Text>
-            </View>
-          </Pressable>
-        </View>
+        <Header onBellPress={() => router.push(ROUTES.tabs.notifications)} />
 
         <View style={styles.statsScaleWrap}>
           <View style={styles.statsCard}>
@@ -449,17 +420,7 @@ export default function ActiveGameScreen() {
         </View>
       </View>
 
-      <BottomTabBar<BottomKey>
-        tabs={bottomTabs}
-        activeKey="map"
-        style={styles.bottomTabOffset}
-        onTabPress={(key) => {
-          if (key === "map") router.replace(ROUTES.tabs.map);
-          if (key === "leaderboard") router.replace(ROUTES.tabs.leaderboard);
-          if (key === "rewards") router.push(ROUTES.mysteryBox);
-          if (key === "store") router.replace(ROUTES.tabs.store);
-        }}
-      />
+      <BottomNav activeTab="map" style={styles.bottomTabOffset} />
 
       {nearStart && !closed ? (
         <View style={[styles.nearStartBadge, { bottom: 236 * contentScale, transform: [{ scale: contentScale }] }]}>

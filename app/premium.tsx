@@ -17,7 +17,6 @@ import {
 } from "lucide-react-native";
 import {
   AlanGoLogo,
-  BottomTabBar,
   ErrorState,
   GlassCard,
   HelperText,
@@ -25,6 +24,7 @@ import {
   RewardCard,
   SoonBadge,
 } from "@/components/ui";
+import { BottomNav } from "@/components/BottomNav";
 import { AnimatedPressable, GlowPulseView, ShimmerBadge } from "@/components/motion";
 import { AmbientGlow, NeonOutline, ParticleDots } from "@/components/fx";
 import { theme } from "@/constants/theme";
@@ -216,18 +216,7 @@ export default function PremiumScreen() {
 
       </ScrollView>
 
-      <BottomTabBar<BottomKey>
-        tabs={bottomTabs}
-        activeKey="profile"
-        onTabPress={(key) => {
-          if (key === "map") router.push(ROUTES.tabs.map);
-          if (key === "missions") router.push(ROUTES.tabs.missions);
-          if (key === "store") router.push(ROUTES.tabs.store);
-          if (key === "notifications") router.push(ROUTES.tabs.notifications);
-          if (key === "profile") router.push(ROUTES.tabs.profile);
-        }}
-        style={styles.bottomTabs}
-      />
+      <BottomNav activeTab="store" style={styles.bottomTabs} />
     </SafeAreaView>
   );
 }

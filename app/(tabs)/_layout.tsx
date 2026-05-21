@@ -73,7 +73,7 @@ export default function TabLayout() {
       <Tabs.Screen name="discover" options={{ href: null }} />
       <Tabs.Screen name="feed" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null, tabBarStyle: { display: "none" } }} />
     </Tabs>
   );
 }
