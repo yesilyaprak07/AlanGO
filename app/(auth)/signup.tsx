@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Animated,
   ImageBackground,
   KeyboardAvoidingView,
@@ -17,16 +18,59 @@ import { CyberTextInput, NeonButton } from "@/components/ui";
 import { useFadeIn } from "@/hooks/useFadeIn";
 import { getScreenBottomPadding } from "@/constants/safeArea";
 import { ROUTES } from "@/constants/routes";
+import { useAuth } from "@/lib/auth";
 
 export default function SignUpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { signUp } = useAuth();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const formAnim = useFadeIn({ duration: 320, delay: 40, fromY: 14, fromScale: 0.98 });
   const legalAnim = useFadeIn({ duration: 240, delay: 120, fromY: 8 });
+
+  const handleSignUp = async () => {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password || !confirmPassword) {
+      Alert.alert("Eksik bilgi", "Lutfen tum gerekli alanlari doldurun.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert("Sifre hatasi", "Sifreler birbiriyle eslesmiyor.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const { error, needsEmailConfirmation } = await signUp(
+        normalizedEmail,
+        password,
+        username.trim() || undefined
+      );
+
+      if (error) {
+        Alert.alert("Kayit basarisiz", `Hesap olusturulamadi: ${error}`);
+        return;
+      }
+
+      if (needsEmailConfirmation) {
+        Alert.alert("E-postani kontrol et", "Kaydini tamamlamak icin e-posta kutunu kontrol et.");
+        router.replace(ROUTES.auth.signin);
+        return;
+      }
+
+      router.replace(ROUTES.tabs.map);
+    } catch {
+      Alert.alert("Hata", "Beklenmeyen bir hata olustu. Lutfen tekrar deneyin.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -102,9 +146,9 @@ export default function SignUpScreen() {
                 fullWidth
                 style={styles.primaryButton}
                 textStyle={styles.primaryButtonText}
-                onPress={() => {
-                  // TODO: Connect sign-up submit action.
-                }}
+                loading={submitting}
+                disabled={submitting}
+                onPress={handleSignUp}
               />
               <NeonButton
                 label="Giriş ekranına dön"

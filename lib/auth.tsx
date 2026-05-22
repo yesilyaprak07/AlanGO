@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { connectSocket, disconnectSocket } from "@/lib/socket";
 
 export interface Profile {
   id: string;
@@ -23,7 +24,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, username: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, username?: string) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -34,7 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   signIn: async () => ({ error: null }),
-  signUp: async () => ({ error: null }),
+  signUp: async () => ({ error: null, needsEmailConfirmation: false }),
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -59,29 +60,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen to auth state changes
   useEffect(() => {
+    let mounted = true;
+    const loadingFallbackTimeout = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          console.log("[auth] Oturum yukleme zaman asimi. loading zorla kapatildi.");
+          return false;
+        }
+        return prev;
+      });
+    }, 8000);
+
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      if (s?.user) {
-        fetchProfile(s.user.id);
+    (async () => {
+      try {
+        const { data: { session: s } } = await supabase.auth.getSession();
+
+        if (!mounted) {
+          return;
+        }
+
+        setSession(s);
+        if (s?.user) {
+          await fetchProfile(s.user.id);
+        }
+      } catch (error) {
+        console.log("[auth] Oturum yuklenemedi:", error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
-    });
+    })();
 
     // Subscribe to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, s) => {
-        setSession(s);
-        if (s?.user) {
-          await fetchProfile(s.user.id);
-        } else {
-          setProfile(null);
+        try {
+          setSession(s);
+          if (s?.user) {
+            await fetchProfile(s.user.id);
+          } else {
+            setProfile(null);
+          }
+        } catch (error) {
+          console.log("[auth] Oturum degisimi islenemedi:", error);
+        } finally {
+          setLoading(false);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(loadingFallbackTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // Session degisince socket baglantisini guncelle.
+  useEffect(() => {
+    try {
+      if (session?.user?.id) {
+        connectSocket(session.user.id);
+        return;
+      }
+
+      disconnectSocket();
+    } catch (error) {
+      console.log("[auth] Socket baglantisi guncellenemedi:", error);
+    }
+  }, [session?.user?.id]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -89,19 +138,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   };
 
-  const signUp = async (email: string, password: string, username: string) => {
+  const signUp = async (email: string, password: string, username?: string) => {
+    const normalizedUsername = username?.trim();
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { username } },
+      options: normalizedUsername ? { data: { username: normalizedUsername } } : undefined,
     });
-    if (error) return { error: error.message };
 
-    return { error: null };
+    if (error) {
+      return { error: error.message, needsEmailConfirmation: false };
+    }
+
+    return {
+      error: null,
+      needsEmailConfirmation: !data.session,
+    };
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    disconnectSocket();
     setSession(null);
     setProfile(null);
   };

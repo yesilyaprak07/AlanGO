@@ -1,8 +1,10 @@
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { View, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Map, ShoppingBag, Trophy, Gift } from "lucide-react-native";
 import { Colors } from "@/constants/colors";
+import { ROUTES } from "@/constants/routes";
+import { useAuth } from "@/lib/auth";
 
 function TabIcon({ Icon, focused, label }: { Icon: typeof Map; focused: boolean; label: string }) {
   return (
@@ -19,6 +21,16 @@ function TabIcon({ Icon, focused, label }: { Icon: typeof Map; focused: boolean;
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { session, loading } = useAuth();
+
+  if (loading) {
+    return null;
+  }
+
+  if (!session) {
+    return <Redirect href={ROUTES.auth.signin} />;
+  }
+
   return (
     <Tabs
       screenOptions={{

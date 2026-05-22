@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Crown,
-  Flag,
   Footprints,
   Gem,
   Gift,
   Map,
-  Pause,
   ShoppingCart,
-  Shield,
   Square,
   Timer,
   Trophy,
@@ -24,11 +21,13 @@ import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
 import { BottomNav } from "@/components/BottomNav";
 import { Header } from "@/components/Header";
+import { getSocket, sendConquer } from "@/lib/socket";
 
 const FALLBACK = { latitude: 36.8969, longitude: 30.7133 };
-const CLOSE_DISTANCE_THRESHOLD = 30;
-const MIN_TRAIL_POINTS = 10;
+const CLOSE_DISTANCE_THRESHOLD = 5; // TEST: normalde 10, lansmanda geri al
+const MIN_TRAIL_POINTS = 3;
 const SPEED_LIMIT_KMH = 25;
+const MIN_POINT_DISTANCE_METERS = 2;
 
 type BottomKey = "map" | "leaderboard" | "rewards" | "store";
 
@@ -62,99 +61,283 @@ export default function ActiveGameScreen() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
-  const { addTerritory, setLastRun, territories } = useGameStore();
+  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const isRecordingRef = useRef(false);
+  const { setLastRun, territories } = useGameStore();
 
   const [currentPos, setCurrentPos] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [startPoint, setStartPoint] = useState<{ latitude: number; longitude: number } | null>(null);
   const [trail, setTrail] = useState<{ latitude: number; longitude: number }[]>([]);
   const [totalDistance, setTotalDistance] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [speedViolation, setSpeedViolation] = useState(false);
-  const [closed, setClosed] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [liveArea, setLiveArea] = useState(0);
-  const startPoint = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [isConquerLoading, setIsConquerLoading] = useState(false);
+  const [resultModalVisible, setResultModalVisible] = useState(false);
+  const [resultCapturedArea, setResultCapturedArea] = useState(0);
+  const [resultDistanceKm, setResultDistanceKm] = useState("0,00");
+  const [resultSteps, setResultSteps] = useState(0);
 
   useEffect(() => {
-    if (closed) return;
+    if (!isRecording) return;
     const interval = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(interval);
-  }, [closed]);
+  }, [isRecording]);
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
-    let mounted = true;
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted" || !mounted) return;
+  const stopLocationTracking = useCallback(() => {
+    locationSubscriptionRef.current?.remove();
+    locationSubscriptionRef.current = null;
+  }, []);
 
-      subscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 2 },
-        (loc) => {
-          if (!mounted || closed) return;
+  useEffect(() => stopLocationTracking, [stopLocationTracking]);
 
-          const coords = {
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          };
+  const startLocationTracking = useCallback(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Konum izni gerekli", "Çizim başlatmak için konum izni vermelisin.");
+      return false;
+    }
 
-          const rawSpeed = loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : 0;
-          if (rawSpeed * 3.6 > SPEED_LIMIT_KMH) {
-            setSpeedViolation(true);
-            return;
+    if (locationSubscriptionRef.current) {
+      return true;
+    }
+
+    locationSubscriptionRef.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 1 },
+      (loc) => {
+        if (!isRecordingRef.current) return;
+
+        console.log(
+          "[gps] yeni konum:",
+          loc.coords.latitude,
+          loc.coords.longitude,
+          "accuracy:",
+          loc.coords.accuracy
+        );
+
+        const coords = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        };
+
+        const rawSpeed = loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : 0;
+        if (rawSpeed * 3.6 > SPEED_LIMIT_KMH) {
+          setSpeedViolation(true);
+          return;
+        }
+
+        setSpeedViolation(false);
+        setCurrentPos(coords);
+
+        setTrail((prev) => {
+          if (prev.length > 0) {
+            const dist = getDistanceMeters(prev[prev.length - 1], coords);
+            if (dist < MIN_POINT_DISTANCE_METERS) {
+              console.log(
+                "[gps] nokta filtrelendi. mesafe:",
+                dist.toFixed(2),
+                "esik:",
+                MIN_POINT_DISTANCE_METERS
+              );
+              return prev;
+            }
+            setTotalDistance((d) => d + dist);
           }
 
-          setSpeedViolation(false);
-          setCurrentPos(coords);
+          if (prev.length === 0) {
+            setStartPoint(coords);
+            mapRef.current?.animateToRegion({ ...coords, latitudeDelta: 0.0032, longitudeDelta: 0.0032 }, 500);
+          }
 
-          setTrail((prev) => {
-            if (prev.length > 0) {
-              const dist = getDistanceMeters(prev[prev.length - 1], coords);
-              if (dist < 2) return prev;
-              setTotalDistance((d) => d + dist);
-            }
+          const updated = [...prev, coords];
+          console.log("[gps] trail uzunlugu:", updated.length);
+          if (updated.length >= 3) {
+            setLiveArea(computePolygonArea(updated));
+          }
+          return updated;
+        });
+      }
+    );
 
-            if (prev.length === 0) {
-              startPoint.current = coords;
-              mapRef.current?.animateToRegion({ ...coords, latitudeDelta: 0.0032, longitudeDelta: 0.0032 }, 500);
-            }
+    return true;
+  }, []);
 
-            const updated = [...prev, coords];
-            if (updated.length >= 3) {
-              setLiveArea(computePolygonArea(updated));
-            }
-            return updated;
-          });
-        }
-      );
-    })();
+  const handleStartDrawing = useCallback(async () => {
+    if (isRecording || isConquerLoading) return;
 
-    return () => {
-      mounted = false;
-      subscription?.remove();
-    };
-  }, [closed]);
+    setTrail([]);
+    setTotalDistance(0);
+    setElapsed(0);
+    setLiveArea(0);
+    setStartPoint(null);
+    setSpeedViolation(false);
 
-  const handlePause = () => router.replace(ROUTES.tabs.map);
+    isRecordingRef.current = true;
+    setIsRecording(true);
+    const started = await startLocationTracking();
+    if (!started) {
+      isRecordingRef.current = false;
+      setIsRecording(false);
+    }
+  }, [isConquerLoading, isRecording, startLocationTracking]);
 
-  const handleFinish = useCallback(() => {
-    if (trail.length < MIN_TRAIL_POINTS) {
+  const handleCancelExit = useCallback(() => {
+    if (isConquerLoading) return;
+
+    const leave = () => {
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      setTrail([]);
+      setLiveArea(0);
+      setTotalDistance(0);
+      setElapsed(0);
+      setStartPoint(null);
+      stopLocationTracking();
       router.replace(ROUTES.tabs.map);
+    };
+
+    if (!isRecording && trail.length === 0) {
+      leave();
       return;
     }
 
-    if (closed) {
-      router.push(ROUTES.result);
+    Alert.alert("Çizim iptal", "Çizimi iptal edip haritaya dönmek istiyor musun?", [
+      { text: "Vazgeç", style: "cancel" },
+      { text: "Çık", style: "destructive", onPress: leave },
+    ]);
+  }, [isConquerLoading, isRecording, router, stopLocationTracking, trail.length]);
+
+  const handleFinish = useCallback(async () => {
+    const localArea = trail.length >= 3 ? computePolygonArea([...trail, trail[0]]) : 0;
+    console.log("[finish] trail uzunlugu:", trail.length);
+    console.log("[finish] hesaplanan alan:", localArea);
+
+    if (isConquerLoading) {
+      console.log("[finish] erken cikis: conquer zaten yukleniyor");
+      return;
+    }
+
+    if (!isRecording) {
+      console.log("[finish] erken cikis: kayit aktif degil");
+      return;
+    }
+
+    if (trail.length < MIN_TRAIL_POINTS) {
+      console.log("[finish] erken cikis: nokta yetersiz");
+      Alert.alert("Henüz kapatılamaz", "Çizimi kapatmak için en az 3 nokta gerekli.");
       return;
     }
 
     const closedTrail = [...trail, trail[0]];
-    const area = computePolygonArea(closedTrail);
-    addTerritory({ polygon: closedTrail, area, distance: totalDistance, duration: elapsed });
-    setLastRun({ polygon: closedTrail, area, distance: totalDistance, duration: elapsed });
-    setTrail(closedTrail);
-    setLiveArea(area);
-    setClosed(true);
-  }, [addTerritory, closed, elapsed, router, setLastRun, totalDistance, trail]);
+    const ring: [number, number][] = closedTrail.map((p) => [p.longitude, p.latitude]);
+
+    if (ring.length > 0) {
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        ring.push([first[0], first[1]]);
+      }
+    }
+
+    const geojsonString = JSON.stringify({
+      type: "Polygon",
+      coordinates: [ring],
+    });
+
+    const mapReasonToMessage = (reason: string) => {
+      if (reason === "too_small") {
+        return "Alan çok küçük, en az 10 m² gerekli. Devam edebilirsin."; // TEST: normalde 10, lansmanda geri al
+      }
+
+      if (reason === "invalid_polygon") {
+        return "Geçersiz alan, tekrar dene";
+      }
+
+      return "Bağlantı hatası, tekrar dene";
+    };
+
+    const socket = getSocket();
+    if (!socket) {
+      Alert.alert("Hata", "Bağlantı ayarı eksik, lütfen daha sonra tekrar dene.");
+      return;
+    }
+    setIsConquerLoading(true);
+
+    try {
+      const conquerResult = await new Promise<any>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          cleanup();
+          reject(new Error("timeout"));
+        }, 12000);
+
+        const onConquerResult = (payload: any) => {
+          cleanup();
+          resolve(payload);
+        };
+
+        const onConnectError = () => {
+          cleanup();
+          reject(new Error("connect_error"));
+        };
+
+        const cleanup = () => {
+          clearTimeout(timeoutId);
+          socket.off("conquer_result", onConquerResult);
+          socket.off("connect_error", onConnectError);
+        };
+
+        socket.on("conquer_result", onConquerResult);
+        socket.on("connect_error", onConnectError);
+
+        console.log("[finish] conquer gonderiliyor, alan:", localArea);
+        sendConquer(geojsonString, totalDistance, elapsed);
+      });
+
+      const result = conquerResult?.result ?? conquerResult;
+      const success = result?.success === true || conquerResult?.ok === true;
+
+      if (!success) {
+        const reason = result?.reason ?? conquerResult?.reason ?? conquerResult?.error ?? "unknown";
+        console.log("[finish] erken cikis: conquer basarisiz, reason:", String(reason));
+        Alert.alert("Fetih başarısız", mapReasonToMessage(String(reason)));
+        return;
+      }
+
+      const capturedArea = Number(result?.captured_area);
+      const finalCapturedArea = Number.isFinite(capturedArea) && capturedArea > 0 ? capturedArea : localArea;
+
+      setLastRun({
+        polygon: closedTrail,
+        area: finalCapturedArea,
+        distance: totalDistance,
+        duration: elapsed,
+      });
+
+      setTrail(closedTrail);
+      setLiveArea(finalCapturedArea);
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      stopLocationTracking();
+
+      setResultCapturedArea(finalCapturedArea);
+      setResultDistanceKm((totalDistance / 1000).toFixed(2).replace(".", ","));
+      setResultSteps(Math.max(0, Math.round(totalDistance / 0.78)));
+      setResultModalVisible(true);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error && error.message === "timeout"
+          ? "Sunucu yanıtı zaman aşımına uğradı, tekrar deneyebilirsin."
+          : "Bağlantı hatası, tekrar deneyebilirsin.";
+      Alert.alert("Hata", errorMessage);
+    } finally {
+      setIsConquerLoading(false);
+    }
+  }, [elapsed, isConquerLoading, isRecording, setLastRun, stopLocationTracking, totalDistance, trail]);
 
   const region = currentPos
     ? { ...currentPos, latitudeDelta: 0.0032, longitudeDelta: 0.0032 }
@@ -163,11 +346,20 @@ export default function ActiveGameScreen() {
   const distKm = (totalDistance / 1000).toFixed(2).replace(".", ",");
   const areaM2 = Math.max(0, Math.round(liveArea));
   const stepCount = Math.max(0, Math.round(totalDistance / 0.78));
+  const distanceToStart = startPoint && currentPos ? getDistanceMeters(currentPos, startPoint) : null;
   const nearStart =
-    !!startPoint.current &&
+    isRecording &&
     trail.length >= MIN_TRAIL_POINTS &&
-    !!currentPos &&
-    getDistanceMeters(currentPos, startPoint.current) <= CLOSE_DISTANCE_THRESHOLD;
+    typeof distanceToStart === "number" &&
+    distanceToStart <= CLOSE_DISTANCE_THRESHOLD;
+  const drawButtonLabel = !isRecording
+    ? "ŞİMDİ ÇİZ"
+    : isConquerLoading
+      ? "GÖNDERİLİYOR..."
+      : nearStart
+        ? "ŞİMDİ KAPAT"
+        : "ÇİZİLİYOR...";
+  const isDrawButtonDisabled = isRecording ? !nearStart || isConquerLoading : false;
 
   // Scale UI overlays to current viewport to avoid overflow on smaller phones.
   const uiScale = useMemo(() => {
@@ -234,8 +426,8 @@ export default function ActiveGameScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_GOOGLE}
-        customMapStyle={darkMapStyle}
+        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+        customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
         initialRegion={region}
         showsCompass={false}
         showsScale={false}
@@ -276,16 +468,16 @@ export default function ActiveGameScreen() {
           </Marker>
         ))}
 
-        {startPoint.current ? (
+        {startPoint ? (
           <>
             <Circle
-              center={startPoint.current}
+              center={startPoint}
               radius={CLOSE_DISTANCE_THRESHOLD}
               strokeColor="rgba(54, 240, 122, 0.42)"
               fillColor="rgba(54, 240, 122, 0.11)"
               strokeWidth={1}
             />
-            <Marker coordinate={startPoint.current} anchor={{ x: 0.5, y: 0.5 }}>
+            <Marker coordinate={startPoint} anchor={{ x: 0.5, y: 0.5 }}>
               <View style={styles.startPinOuter}>
                 <View style={styles.startPinInner} />
               </View>
@@ -385,6 +577,12 @@ export default function ActiveGameScreen() {
         </View>
       ) : null}
 
+      {isConquerLoading ? (
+        <View style={[styles.warningPill, styles.conquerLoadingPill, { transform: [{ scale: contentScale }] }]}>
+          <Text style={styles.warningText}>Fetih hesaplanıyor...</Text>
+        </View>
+      ) : null}
+
       <View
         style={[
           styles.bottomControls,
@@ -395,38 +593,81 @@ export default function ActiveGameScreen() {
         ]}
       >
         <View style={styles.bottomControlsInner}>
-          <Pressable style={styles.ctrlButton} onPress={handlePause}>
-            <View style={styles.ctrlCircle}>
-              <Pause size={26} color="#E6EAF0" />
-            </View>
-            <Text style={styles.ctrlLabel}>Duraklat</Text>
-          </Pressable>
-
-          <Pressable style={styles.ctrlCenterWrap} onPress={handleFinish}>
-            <View style={styles.ctrlCenterCircleOuter}>
-              <View style={styles.ctrlCenterCircleInner}>
-                <Square size={24} color="#FFFFFF" fill="#FFFFFF" />
+          <Pressable
+            style={[styles.ctrlCenterWrap, isDrawButtonDisabled ? styles.ctrlCenterWrapDisabled : null]}
+            onPress={!isRecording ? handleStartDrawing : handleFinish}
+            disabled={isDrawButtonDisabled}
+          >
+            <View
+              style={[
+                styles.ctrlCenterCircleOuter,
+                !isRecording ? styles.ctrlCenterCircleOuterStart : null,
+                nearStart && !isConquerLoading ? styles.ctrlCenterCircleOuterReady : null,
+              ]}
+            >
+              <View
+                style={[
+                  styles.ctrlCenterCircleInner,
+                  !isRecording ? styles.ctrlCenterCircleInnerStart : null,
+                  nearStart && !isConquerLoading ? styles.ctrlCenterCircleInnerReady : null,
+                ]}
+              >
+                <Square size={24} color="#FFFFFF" />
               </View>
             </View>
-            <Text style={styles.ctrlLabelCenter}>{closed ? "Sonucu Aç" : "Bitir & Kaydet"}</Text>
+            <Text style={styles.ctrlLabelCenter}>{drawButtonLabel}</Text>
           </Pressable>
 
-          <Pressable style={styles.ctrlButton} onPress={handleFinish}>
-            <View style={styles.ctrlCircle}>
-              <Flag size={26} color="#E6EAF0" />
-            </View>
-            <Text style={styles.ctrlLabel}>Tur Bitir</Text>
+          <Pressable style={styles.exitButton} onPress={handleCancelExit} disabled={isConquerLoading}>
+            <Text style={styles.exitButtonText}>Vazgeç / Çık</Text>
           </Pressable>
         </View>
       </View>
 
       <BottomNav activeTab="map" style={styles.bottomTabOffset} />
 
-      {nearStart && !closed ? (
-        <View style={[styles.nearStartBadge, { bottom: 236 * contentScale, transform: [{ scale: contentScale }] }]}>
-          <Text style={styles.nearStartText}>Başlangıç noktasına yaklaştın, turu kapatabilirsin</Text>
+      {isRecording && typeof distanceToStart === "number" ? (
+        <View style={[styles.distanceBadge, { bottom: 272 * contentScale, transform: [{ scale: contentScale }] }]}>
+          <Text style={styles.distanceText}>Başlangıca {Math.round(distanceToStart)} m</Text>
         </View>
       ) : null}
+
+      {nearStart ? (
+        <View style={[styles.nearStartBadge, { bottom: 236 * contentScale, transform: [{ scale: contentScale }] }]}>
+          <Text style={styles.nearStartText}>Başlangıca döndün, şimdi kapatabilirsin</Text>
+        </View>
+      ) : null}
+
+      <Modal transparent animationType="fade" visible={resultModalVisible} onRequestClose={() => {}}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Fetih Tamamlandı</Text>
+
+            <View style={styles.modalStatRow}>
+              <Text style={styles.modalStatLabel}>Kazanılan Alan</Text>
+              <Text style={styles.modalStatValue}>{Math.round(resultCapturedArea).toLocaleString("tr-TR")} m²</Text>
+            </View>
+            <View style={styles.modalStatRow}>
+              <Text style={styles.modalStatLabel}>Mesafe</Text>
+              <Text style={styles.modalStatValue}>{resultDistanceKm} km</Text>
+            </View>
+            <View style={styles.modalStatRow}>
+              <Text style={styles.modalStatLabel}>Adım</Text>
+              <Text style={styles.modalStatValue}>{resultSteps.toLocaleString("tr-TR")}</Text>
+            </View>
+
+            <Pressable
+              style={styles.modalButton}
+              onPress={() => {
+                setResultModalVisible(false);
+                router.replace(ROUTES.tabs.map);
+              }}
+            >
+              <Text style={styles.modalButtonText}>Tamam</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -753,6 +994,9 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     zIndex: 6,
   },
+  conquerLoadingPill: {
+    top: 132,
+  },
   warningText: {
     color: "#FF5D5D",
     fontFamily: theme.typography.fontFamily.semibold,
@@ -774,6 +1018,21 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.semibold,
     fontSize: 12,
   },
+  distanceBadge: {
+    position: "absolute",
+    alignSelf: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(0, 232, 255, 0.35)",
+    backgroundColor: "rgba(10, 18, 29, 0.88)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  distanceText: {
+    color: "#82F2FF",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 12,
+  },
   bottomControls: {
     position: "absolute",
     left: 0,
@@ -785,65 +1044,136 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 430,
     paddingHorizontal: 12,
-    flexDirection: "row",
+    flexDirection: "column",
     justifyContent: "center",
-    alignItems: "flex-end",
-    gap: 16,
+    alignItems: "center",
+    gap: 12,
   },
   bottomTabOffset: {
     bottom: -16,
   },
-  ctrlButton: {
-    width: 132,
-    alignItems: "center",
-    gap: 8,
-  },
-  ctrlCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    borderWidth: 1,
-    borderColor: "rgba(120, 160, 180, 0.38)",
-    backgroundColor: "rgba(17, 24, 33, 0.92)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ctrlLabel: {
-    color: "#E6EAF0",
-    fontFamily: theme.typography.fontFamily.semibold,
-    fontSize: 15,
-  },
   ctrlCenterWrap: {
-    width: 176,
+    width: 216,
     alignItems: "center",
     gap: 8,
+  },
+  ctrlCenterWrapDisabled: {
+    opacity: 0.72,
   },
   ctrlCenterCircleOuter: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: "rgba(255, 51, 48, 0.2)",
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: "rgba(0, 232, 255, 0.18)",
     borderWidth: 1,
-    borderColor: "rgba(255, 51, 48, 0.62)",
+    borderColor: "rgba(0, 232, 255, 0.58)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#FF3330",
+    shadowColor: "#00E8FF",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 14,
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
     elevation: 8,
   },
+  ctrlCenterCircleOuterStart: {
+    backgroundColor: "rgba(0, 232, 255, 0.2)",
+  },
+  ctrlCenterCircleOuterReady: {
+    backgroundColor: "rgba(54, 240, 122, 0.24)",
+    borderColor: "rgba(54, 240, 122, 0.72)",
+    shadowColor: "#36F07A",
+    shadowOpacity: 0.65,
+    shadowRadius: 18,
+  },
   ctrlCenterCircleInner: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: "#FF3330",
+    width: 98,
+    height: 98,
+    borderRadius: 49,
+    backgroundColor: "#00E8FF",
     alignItems: "center",
     justifyContent: "center",
+  },
+  ctrlCenterCircleInnerStart: {
+    backgroundColor: "#00D7EE",
+  },
+  ctrlCenterCircleInnerReady: {
+    backgroundColor: "#36F07A",
   },
   ctrlLabelCenter: {
     color: "#E6EAF0",
     fontFamily: theme.typography.fontFamily.bold,
     fontSize: 17,
+  },
+  exitButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.4)",
+    backgroundColor: "rgba(10, 18, 29, 0.82)",
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+  },
+  exitButtonText: {
+    color: "#AAB6C4",
+    fontFamily: theme.typography.fontFamily.semibold,
+    fontSize: 13,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.52)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(0, 232, 255, 0.4)",
+    backgroundColor: "rgba(8, 18, 29, 0.98)",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    gap: 12,
+  },
+  modalTitle: {
+    color: "#EAFBFF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 22,
+    textAlign: "center",
+  },
+  modalStatRow: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(120, 160, 180, 0.25)",
+    backgroundColor: "rgba(16, 30, 45, 0.7)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalStatLabel: {
+    color: "#9AB2C8",
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: 14,
+  },
+  modalStatValue: {
+    color: "#E8F9FF",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
+  },
+  modalButton: {
+    marginTop: 4,
+    borderRadius: 14,
+    backgroundColor: "#00D8F0",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  modalButtonText: {
+    color: "#052026",
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: 16,
   },
 });

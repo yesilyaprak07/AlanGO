@@ -8,7 +8,7 @@ import {
   Share,
   Animated,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { useEffect, useRef } from "react";
@@ -33,6 +33,7 @@ function formatDistance(meters: number): string {
 
 export default function ResultScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ captured_area?: string; total_area?: string }>();
   const { lastRun, territories, saveGameSession } = useGameStore();
   const { profile, refreshProfile } = useAuth();
   const mapRef = useRef<MapView>(null);
@@ -41,13 +42,18 @@ export default function ResultScreen() {
   const slideAnim = useRef(new Animated.Value(40)).current;
   const glowAnim = useRef(new Animated.Value(0.3)).current;
 
-  const area = lastRun?.area ?? 0;
+  const areaFromServer = Number(params.captured_area);
+  const totalAreaFromServer = Number(params.total_area);
+  const area = Number.isFinite(areaFromServer) && areaFromServer > 0 ? areaFromServer : (lastRun?.area ?? 0);
   const distance = lastRun?.distance ?? 0;
   const duration = lastRun?.duration ?? 0;
   const polygon = lastRun?.polygon ?? [];
   const xp = Math.round(area / 10) + Math.round(distance / 5);
   const gold = Math.round(area / 20) + 50;
   const areaKm2 = (area / 1_000_000).toFixed(2);
+  const totalAreaKm2 = Number.isFinite(totalAreaFromServer) && totalAreaFromServer > 0
+    ? (totalAreaFromServer / 1_000_000).toFixed(2)
+    : null;
   const level = profile?.level ?? 1;
   const xpCurrent = profile?.xp ?? 0;
   const xpNext = level * 1000;
@@ -170,6 +176,7 @@ export default function ResultScreen() {
           <Text style={styles.areaLabel}>ELE GEÇİRİLEN ALAN</Text>
           <Text style={styles.areaValue}>{area > 0 ? areaKm2 : "0.84"}</Text>
           <Text style={styles.areaUnit}>km²</Text>
+          {totalAreaKm2 ? <Text style={styles.totalAreaText}>Toplam alanın: {totalAreaKm2} km²</Text> : null}
         </View>
 
         {/* Level + XP */}
@@ -299,6 +306,12 @@ const styles = StyleSheet.create({
   areaLabel: { fontSize: 10, fontWeight: "700", color: Colors.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
   areaValue: { fontSize: 52, fontWeight: "800", color: Colors.cyan, lineHeight: 56 },
   areaUnit: { fontSize: 18, fontWeight: "600", color: Colors.textSecondary },
+  totalAreaText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: "600",
+  },
   levelRow: {
     flexDirection: "row",
     justifyContent: "space-between",

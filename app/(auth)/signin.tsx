@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Animated,
   ImageBackground,
   KeyboardAvoidingView,
@@ -18,14 +19,42 @@ import { CyberTextInput, NeonButton } from "@/components/ui";
 import { useFadeIn } from "@/hooks/useFadeIn";
 import { getScreenBottomPadding } from "@/constants/safeArea";
 import { ROUTES } from "@/constants/routes";
+import { useAuth } from "@/lib/auth";
 
 export default function SignInScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const formAnim = useFadeIn({ duration: 320, delay: 40, fromY: 14, fromScale: 0.98 });
   const legalAnim = useFadeIn({ duration: 240, delay: 120, fromY: 8 });
+
+  const handleSignIn = async () => {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password) {
+      Alert.alert("Eksik bilgi", "Lutfen e-posta ve sifre alanlarini doldurun.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const { error } = await signIn(normalizedEmail, password);
+
+      if (error) {
+        Alert.alert("Giris basarisiz", `Giris yapilamadi: ${error}`);
+        return;
+      }
+
+      router.replace(ROUTES.tabs.map);
+    } catch {
+      Alert.alert("Hata", "Beklenmeyen bir hata olustu. Lutfen tekrar deneyin.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -83,10 +112,9 @@ export default function SignInScreen() {
                 fullWidth
                 style={styles.primaryButton}
                 textStyle={styles.primaryButtonText}
-                onPress={() => {
-                  // Temporary bypass for local testing.
-                  router.replace(ROUTES.tabs.map);
-                }}
+                loading={submitting}
+                disabled={submitting}
+                onPress={handleSignIn}
               />
 
               <View style={styles.dividerRow}>
