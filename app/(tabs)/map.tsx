@@ -1,11 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Animated, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import {
   ChevronDown,
-  Crown,
   FlagTriangleRight,
   Footprints,
   Gift,
@@ -16,8 +15,6 @@ import {
   Settings,
   Shield,
   ShoppingCart,
-  Skull,
-  Star,
   Trophy,
   User,
   X,
@@ -28,18 +25,20 @@ import { theme } from "@/constants/theme";
 import { ROUTES } from "@/constants/routes";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
+import { useGameStore } from "@/stores/gameStore";
 
 const FALLBACK_CENTER = { latitude: 36.8969, longitude: 30.7133 };
 const HUD_SIDE_GAP = 7;
 
 type BottomKey = "map" | "leaderboard" | "rewards" | "store";
 
-function offset(center: { latitude: number; longitude: number }, lat: number, lng: number) {
-  return {
-    latitude: center.latitude + lat,
-    longitude: center.longitude + lng,
-  };
-}
+const AVATAR_MAP: Record<string, any> = {
+  avatar_pilot: require("@/assets/images/avatars/avatar_pilot.png"),
+  avatar_elite: require("@/assets/images/avatars/avatar_elite.png"),
+  avatar_rookie: require("@/assets/images/avatars/avatar_rookie.png"),
+  avatar_sniper: require("@/assets/images/avatars/avatar_sniper.png"),
+  avatar_soldier: require("@/assets/images/avatars/avatar_soldier.png"),
+};
 
 export default function MapScreen() {
   const router = useRouter();
@@ -52,6 +51,7 @@ export default function MapScreen() {
   const [cityMenuOpen, setCityMenuOpen] = useState(false);
   const [selectedCityScope, setSelectedCityScope] = useState("Antalya");
   const menuAnim = useRef(new Animated.Value(0)).current;
+  const { territories, loadTerritories } = useGameStore();
 
   const center = FALLBACK_CENTER;
   const initialRegion = {
@@ -60,72 +60,10 @@ export default function MapScreen() {
     longitudeDelta: 0.014,
   };
 
-  const territories = useMemo(
-    () => [
-      {
-        id: "cyan",
-        stroke: "#10F4E8",
-        fill: "rgba(16, 244, 232, 0.16)",
-        icon: <Shield size={8} color="#B9FFF8" />,
-        badge: offset(center, 0.0002, -0.0002),
-        nodes: [
-          offset(center, 0.0022, -0.0045),
-          offset(center, 0.0038, -0.0025),
-          offset(center, 0.0030, -0.0001),
-          offset(center, 0.0011, 0.0011),
-          offset(center, -0.0014, -0.0007),
-          offset(center, -0.0011, -0.0033),
-        ],
-      },
-      {
-        id: "red",
-        stroke: "#FF3B4F",
-        fill: "rgba(255, 59, 79, 0.17)",
-        icon: <Skull size={8} color="#FF8D97" />,
-        badge: offset(center, 0.0006, -0.0084),
-        nodes: [
-          offset(center, 0.0017, -0.0082),
-          offset(center, -0.0001, -0.0068),
-          offset(center, -0.0016, -0.0078),
-          offset(center, -0.0010, -0.0106),
-          offset(center, 0.0011, -0.0108),
-        ],
-      },
-      {
-        id: "purple",
-        stroke: "#9B5CFF",
-        fill: "rgba(155, 92, 255, 0.18)",
-        icon: <Crown size={8} color="#D0B0FF" />,
-        badge: offset(center, -0.0024, 0.0037),
-        nodes: [
-          offset(center, -0.0012, 0.0012),
-          offset(center, 0.0003, 0.0037),
-          offset(center, -0.0014, 0.0069),
-          offset(center, -0.0038, 0.0054),
-          offset(center, -0.0045, 0.0021),
-        ],
-      },
-      {
-        id: "gold",
-        stroke: "#FFC83D",
-        fill: "rgba(255, 200, 61, 0.18)",
-        icon: <Star size={8} color="#FFE6A3" />,
-        badge: offset(center, -0.0058, -0.0021),
-        nodes: [
-          offset(center, -0.0060, -0.0039),
-          offset(center, -0.0046, -0.0015),
-          offset(center, -0.0058, 0.0008),
-          offset(center, -0.0082, -0.0004),
-          offset(center, -0.0080, -0.0030),
-        ],
-      },
-    ],
-    [center]
-  );
-
-  const nodePoints = useMemo(
-    () => territories.flatMap((t) => t.nodes.map((n) => ({ ...n, id: `${t.id}-${n.latitude}-${n.longitude}`, color: t.stroke }))),
-    [territories]
+  useFocusEffect(
+    useCallback(() => {
+      loadTerritories();
+    }, [loadTerritories])
   );
 
   const tabs = [
@@ -217,6 +155,29 @@ export default function MapScreen() {
     );
   }, []);
 
+  const handleZoomToMyTerritories = useCallback(() => {
+    const myTerritories = territories.filter((t) => t.isOwn);
+    if (myTerritories.length === 0) return;
+
+    const allPoints = myTerritories.flatMap((t) => t.polygon);
+    const minLat = Math.min(...allPoints.map((p) => p.latitude));
+    const maxLat = Math.max(...allPoints.map((p) => p.latitude));
+    const minLng = Math.min(...allPoints.map((p) => p.longitude));
+    const maxLng = Math.max(...allPoints.map((p) => p.longitude));
+
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    const latDelta = Math.max((maxLat - minLat) * 1.5, 0.005);
+    const lngDelta = Math.max((maxLng - minLng) * 1.5, 0.005);
+
+    mapRef.current?.animateToRegion({
+      latitude: centerLat,
+      longitude: centerLng,
+      latitudeDelta: latDelta,
+      longitudeDelta: lngDelta,
+    }, 800);
+  }, [territories]);
+
   const handleDrawerMenuPress = useCallback(
     (key: string) => {
       closeMenu();
@@ -254,21 +215,58 @@ export default function MapScreen() {
         showsScale={false}
         toolbarEnabled={false}
       >
-        {territories.map((area) => (
-          <Polygon key={area.id} coordinates={area.nodes} strokeColor={area.stroke} fillColor={area.fill} strokeWidth={1} />
-        ))}
-
-        {nodePoints.map((node) => (
-          <Marker key={node.id} coordinate={node} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={[styles.nodeDot, { borderColor: node.color, shadowColor: node.color }]} />
-          </Marker>
-        ))}
-
-        {territories.map((area) => (
-          <Marker key={`${area.id}-badge`} coordinate={area.badge} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={[styles.zoneBadge, { borderColor: `${area.stroke}AA`, shadowColor: area.stroke }]}>{area.icon}</View>
-          </Marker>
-        ))}
+        {territories.map((t) => {
+          const centerLat = t.polygon.reduce((s, p) => s + p.latitude, 0) / t.polygon.length;
+          const centerLng = t.polygon.reduce((s, p) => s + p.longitude, 0) / t.polygon.length;
+          const strokeColor = t.isOwn ? "rgba(0, 232, 255, 0.8)" : "rgba(180, 100, 255, 0.8)";
+          const fillColor = t.color ?? (t.isOwn ? "rgba(0, 232, 255, 0.2)" : "rgba(180, 100, 255, 0.2)");
+          return (
+            <React.Fragment key={t.id}>
+              <Polygon
+                coordinates={t.polygon}
+                strokeColor={strokeColor}
+                fillColor={fillColor}
+                strokeWidth={2}
+              />
+                <Marker coordinate={{ latitude: centerLat, longitude: centerLng }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={true}>
+                  <View style={{ alignItems: "center", gap: 3 }}>
+                  <View style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    borderWidth: 2,
+                    borderColor: t.isOwn ? "#00E8FF" : "#B464FF",
+                    backgroundColor: "rgba(8, 18, 28, 0.9)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {t.ownerAvatarUrl ? (
+                      <Image source={{ uri: t.ownerAvatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                    ) : t.ownerAvatarKey ? (
+                      <Image source={AVATAR_MAP[t.ownerAvatarKey] ?? AVATAR_MAP["avatar_pilot"]} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                    ) : (
+                      <Text style={{ color: "#00E8FF", fontSize: 16, fontWeight: "bold" }}>
+                        {(t.ownerUsername ?? "?").charAt(0).toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{
+                    backgroundColor: "rgba(8, 18, 28, 0.88)",
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 5,
+                    borderWidth: 1,
+                    borderColor: t.isOwn ? "rgba(0,232,255,0.4)" : "rgba(180,100,255,0.4)",
+                  }}>
+                    <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "600" }} numberOfLines={1}>
+                      {t.ownerUsername ?? ""}
+                    </Text>
+                  </View>
+                </View>
+              </Marker>
+            </React.Fragment>
+          );
+        })}
       </MapView>
 
       <SafeAreaView style={styles.topOverlay} edges={["top"]}>
@@ -287,6 +285,9 @@ export default function MapScreen() {
         </Pressable>
         <Pressable style={styles.railBtn} onPress={() => setDailyMissionPopupOpen(true)}>
           <Image source={require("../../assets/images/ui/gorev.png")} style={styles.railImage} resizeMode="contain" />
+        </Pressable>
+        <Pressable style={styles.railBtn} onPress={handleZoomToMyTerritories}>
+          <Image source={require("../../assets/images/ui/alanlar.png")} style={styles.railImage} resizeMode="contain" />
         </Pressable>
       </View>
 

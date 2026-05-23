@@ -15,6 +15,7 @@ import {
 } from "lucide-react-native";
 import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
+import { Pedometer } from "expo-sensors";
 import { useGameStore, computePolygonArea } from "@/stores/gameStore";
 import { darkMapStyle } from "@/constants/mapStyles";
 import { theme } from "@/constants/theme";
@@ -24,7 +25,7 @@ import { Header } from "@/components/Header";
 import { getSocket, sendConquer } from "@/lib/socket";
 
 const FALLBACK = { latitude: 36.8969, longitude: 30.7133 };
-const CLOSE_DISTANCE_THRESHOLD = 5; // TEST: normalde 10, lansmanda geri al
+const CLOSE_DISTANCE_THRESHOLD = 20; // TEST: normalde 10, lansmanda geri al
 const MIN_TRAIL_POINTS = 3;
 const SPEED_LIMIT_KMH = 25;
 const MIN_POINT_DISTANCE_METERS = 2;
@@ -62,8 +63,9 @@ export default function ActiveGameScreen() {
   const { width, height } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const pedometerSubscriptionRef = useRef<any>(null);
   const isRecordingRef = useRef(false);
-  const { setLastRun, territories } = useGameStore();
+  const { setLastRun, territories, addTerritory } = useGameStore();
 
   const [currentPos, setCurrentPos] = useState<{ latitude: number; longitude: number } | null>(null);
   const [startPoint, setStartPoint] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -73,6 +75,7 @@ export default function ActiveGameScreen() {
   const [speedViolation, setSpeedViolation] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [liveArea, setLiveArea] = useState(0);
+  const [stepCount, setStepCount] = useState(0);
   const [isConquerLoading, setIsConquerLoading] = useState(false);
   const [resultModalVisible, setResultModalVisible] = useState(false);
   const [resultCapturedArea, setResultCapturedArea] = useState(0);
@@ -92,6 +95,8 @@ export default function ActiveGameScreen() {
   const stopLocationTracking = useCallback(() => {
     locationSubscriptionRef.current?.remove();
     locationSubscriptionRef.current = null;
+    pedometerSubscriptionRef.current?.remove();
+    pedometerSubscriptionRef.current = null;
   }, []);
 
   useEffect(() => stopLocationTracking, [stopLocationTracking]);
@@ -178,6 +183,12 @@ export default function ActiveGameScreen() {
     setSpeedViolation(false);
 
     isRecordingRef.current = true;
+    const { status } = await Pedometer.requestPermissionsAsync();
+    if (status === "granted") {
+      pedometerSubscriptionRef.current = Pedometer.watchStepCount((result) => {
+        setStepCount(result.steps);
+      });
+    }
     setIsRecording(true);
     const started = await startLocationTracking();
     if (!started) {
@@ -197,6 +208,8 @@ export default function ActiveGameScreen() {
       setTotalDistance(0);
       setElapsed(0);
       setStartPoint(null);
+      pedometerSubscriptionRef.current?.remove();
+      pedometerSubscriptionRef.current = null;
       stopLocationTracking();
       router.replace(ROUTES.tabs.map);
     };
@@ -269,11 +282,12 @@ export default function ActiveGameScreen() {
     setIsConquerLoading(true);
 
     try {
+      console.log("[finish] socket connected:", socket.connected, "socket id:", socket.id);
       const conquerResult = await new Promise<any>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           cleanup();
           reject(new Error("timeout"));
-        }, 12000);
+        }, 30000);
 
         const onConquerResult = (payload: any) => {
           cleanup();
@@ -318,15 +332,24 @@ export default function ActiveGameScreen() {
         duration: elapsed,
       });
 
+      addTerritory({
+        polygon: closedTrail,
+        area: finalCapturedArea,
+        distance: totalDistance,
+        duration: elapsed,
+      });
+
       setTrail(closedTrail);
       setLiveArea(finalCapturedArea);
       isRecordingRef.current = false;
       setIsRecording(false);
+      pedometerSubscriptionRef.current?.remove();
+      pedometerSubscriptionRef.current = null;
       stopLocationTracking();
 
       setResultCapturedArea(finalCapturedArea);
       setResultDistanceKm((totalDistance / 1000).toFixed(2).replace(".", ","));
-      setResultSteps(Math.max(0, Math.round(totalDistance / 0.78)));
+      setResultSteps(stepCount);
       setResultModalVisible(true);
     } catch (error) {
       const errorMessage =
@@ -337,7 +360,13 @@ export default function ActiveGameScreen() {
     } finally {
       setIsConquerLoading(false);
     }
-  }, [elapsed, isConquerLoading, isRecording, setLastRun, stopLocationTracking, totalDistance, trail]);
+  }, [addTerritory, elapsed, isConquerLoading, isRecording, setLastRun, stepCount, stopLocationTracking, totalDistance, trail]);
+
+  const initialRegion = {
+    ...FALLBACK,
+    latitudeDelta: 0.0032,
+    longitudeDelta: 0.0032,
+  };
 
   const region = currentPos
     ? { ...currentPos, latitudeDelta: 0.0032, longitudeDelta: 0.0032 }
@@ -345,7 +374,6 @@ export default function ActiveGameScreen() {
 
   const distKm = (totalDistance / 1000).toFixed(2).replace(".", ",");
   const areaM2 = Math.max(0, Math.round(liveArea));
-  const stepCount = Math.max(0, Math.round(totalDistance / 0.78));
   const distanceToStart = startPoint && currentPos ? getDistanceMeters(currentPos, startPoint) : null;
   const nearStart =
     isRecording &&
@@ -376,43 +404,41 @@ export default function ActiveGameScreen() {
         id: "zone-cyan",
         fill: "rgba(54, 240, 122, 0.14)",
         stroke: "rgba(54, 240, 122, 0.42)",
-        marker: offset(region, 0.00055, 0.00025),
+        marker: offset(FALLBACK, 0.00055, 0.00025),
         nodes: [
-          offset(region, 0.00075, 0.00005),
-          offset(region, 0.0009, 0.00035),
-          offset(region, 0.00045, 0.00065),
-          offset(region, 0.0002, 0.00025),
+          offset(FALLBACK, 0.00075, 0.00005),
+          offset(FALLBACK, 0.0009, 0.00035),
+          offset(FALLBACK, 0.00045, 0.00065),
+          offset(FALLBACK, 0.0002, 0.00025),
         ],
       },
       {
         id: "zone-purple",
         fill: "rgba(157, 77, 255, 0.18)",
         stroke: "rgba(157, 77, 255, 0.44)",
-        marker: offset(region, 0.00035, 0.00075),
+        marker: offset(FALLBACK, 0.00035, 0.00075),
         nodes: [
-          offset(region, 0.00055, 0.00055),
-          offset(region, 0.0007, 0.00095),
-          offset(region, 0.0002, 0.00115),
-          offset(region, 0.00005, 0.0007),
+          offset(FALLBACK, 0.00055, 0.00055),
+          offset(FALLBACK, 0.0007, 0.00095),
+          offset(FALLBACK, 0.0002, 0.00115),
+          offset(FALLBACK, 0.00005, 0.0007),
         ],
       },
       {
         id: "zone-gold",
         fill: "rgba(255, 184, 58, 0.17)",
         stroke: "rgba(255, 184, 58, 0.42)",
-        marker: offset(region, -0.00035, 0.00035),
+        marker: offset(FALLBACK, -0.00035, 0.00035),
         nodes: [
-          offset(region, -0.00005, 0.00015),
-          offset(region, -0.00015, 0.00065),
-          offset(region, -0.0006, 0.0007),
-          offset(region, -0.0008, 0.00025),
+          offset(FALLBACK, -0.00005, 0.00015),
+          offset(FALLBACK, -0.00015, 0.00065),
+          offset(FALLBACK, -0.0006, 0.0007),
+          offset(FALLBACK, -0.0008, 0.00025),
         ],
       },
     ],
-    [region]
+    []
   );
-
-  const routeNodes = trail.filter((_, idx) => idx % 2 === 0 || idx === trail.length - 1);
 
   const bottomTabs: { key: BottomKey; label: string; icon: React.ReactNode; badge?: boolean }[] = [
     { key: "map", label: "Harita", icon: <Map size={12} color="#10F4E8" /> },
@@ -428,7 +454,7 @@ export default function ActiveGameScreen() {
         style={StyleSheet.absoluteFillObject}
         provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
         customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
-        initialRegion={region}
+        initialRegion={initialRegion}
         showsCompass={false}
         showsScale={false}
         toolbarEnabled={false}
@@ -462,12 +488,6 @@ export default function ActiveGameScreen() {
           </>
         ) : null}
 
-        {routeNodes.map((p, i) => (
-          <Marker key={`node-${i}`} coordinate={p} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.routeNode} />
-          </Marker>
-        ))}
-
         {startPoint ? (
           <>
             <Circle
@@ -485,13 +505,14 @@ export default function ActiveGameScreen() {
           </>
         ) : null}
 
-        {trail.length > 1 ? (
-          <Marker coordinate={trail[trail.length - 1]} anchor={{ x: 0.5, y: 0.5 }}>
-            <View style={styles.finishPin}>
-              <Text style={styles.finishPinText}>#</Text>
+        {currentPos ? (
+          <Marker coordinate={currentPos} anchor={{ x: 0.5, y: 0.5 }} flat>
+            <View style={styles.playerMarker}>
+              <View style={styles.playerMarkerInner} />
             </View>
           </Marker>
         ) : null}
+
       </MapView>
 
       <SafeAreaView style={styles.topWrap} edges={["top"]}>
@@ -966,6 +987,27 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     backgroundColor: "#F2FFF7",
+  },
+  playerMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0, 232, 255, 0.25)",
+    borderWidth: 2,
+    borderColor: "#00E8FF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#00E8FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  playerMarkerInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#FFFFFF",
   },
   finishPin: {
     width: 30,

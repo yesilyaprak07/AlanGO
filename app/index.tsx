@@ -1,5 +1,5 @@
 ﻿import { useEffect } from "react";
-import { View, StyleSheet, ImageBackground } from "react-native";
+import { View, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/lib/auth";
@@ -29,11 +29,7 @@ export default function SplashScreen() {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={require("@/assets/images/splash-icon.png")}
-        resizeMode="cover"
-        style={styles.fullscreenImage}
-      />
+      <Image source={require("@/assets/images/splash-icon.png")} style={styles.splashImage} resizeMode="cover" />
     </View>
   );
 }
@@ -43,7 +39,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
-  fullscreenImage: {
+  splashImage: {
     flex: 1,
     width: "100%",
     height: "100%",

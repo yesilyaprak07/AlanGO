@@ -137,6 +137,7 @@ io.on('connection', (socket) => {
     const { geojson, distance, duration } = payload;
 
     try {
+      console.log('[conquer] RPC cagriliyor, userId:', userId);
       const { data, error } = await supabase.rpc('conquer_territory', {
         p_user_id: userId,
         p_geojson: geojson,
@@ -145,12 +146,15 @@ io.on('connection', (socket) => {
       });
 
       if (error) {
+        console.log('[conquer] RPC hata:', error);
         socket.emit('conquer_result', {
           ok: false,
           error: error.message || 'rpc_error',
         });
         return;
       }
+
+      console.log('[conquer] RPC basarili, data:', data);
 
       socket.emit('conquer_result', {
         ok: true,

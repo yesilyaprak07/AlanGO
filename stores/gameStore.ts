@@ -16,6 +16,10 @@ export interface Territory {
   duration: number; // seconds
   createdAt: number; // timestamp
   color: string;
+  ownerUsername?: string;
+  ownerAvatarUrl?: string;
+  ownerAvatarKey?: string;
+  isOwn?: boolean;
 }
 
 /** Shoelace formula with equirectangular projection → area in m² */
@@ -61,6 +65,45 @@ function fromRing(ring: [number, number][]): LatLng[] {
     ? ring.slice(0, -1)
     : ring;
   return points.map((p) => ({ latitude: p[1], longitude: p[0] }));
+}
+
+function normalizeStoredPolygon(polygon: any): LatLng[] {
+  // App-native format: [{ latitude, longitude }, ...]
+  if (Array.isArray(polygon) && polygon.length > 0 && typeof polygon[0] === "object" && "latitude" in polygon[0]) {
+    const points = polygon
+      .filter((p: any) => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude)))
+      .map((p: any) => ({ latitude: Number(p.latitude), longitude: Number(p.longitude) }));
+    return points.length >= 3 ? points : [];
+  }
+
+  const toLatLngFromLngLatRing = (ring: any): LatLng[] => {
+    if (!Array.isArray(ring)) return [];
+    const points = ring
+      .filter((c: any) => Array.isArray(c) && c.length >= 2 && Number.isFinite(Number(c[0])) && Number.isFinite(Number(c[1])))
+      .map((c: any) => ({ latitude: Number(c[1]), longitude: Number(c[0]) }));
+
+    if (points.length > 1) {
+      const first = points[0];
+      const last = points[points.length - 1];
+      if (first.latitude === last.latitude && first.longitude === last.longitude) {
+        points.pop();
+      }
+    }
+
+    return points.length >= 3 ? points : [];
+  };
+
+  // GeoJSON Polygon
+  if (polygon && polygon.type === "Polygon" && Array.isArray(polygon.coordinates)) {
+    return toLatLngFromLngLatRing(polygon.coordinates[0]);
+  }
+
+  // GeoJSON MultiPolygon: use first polygon outer ring for map/store compatibility.
+  if (polygon && polygon.type === "MultiPolygon" && Array.isArray(polygon.coordinates)) {
+    return toLatLngFromLngLatRing(polygon.coordinates[0]?.[0]);
+  }
+
+  return [];
 }
 
 /** Merge overlapping territories, return merged list */
@@ -138,6 +181,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       createdAt: Date.now(),
       color: "rgba(0, 240, 255, 0.25)",
+      ownerUsername: "Sen",
+      ownerAvatarUrl: "",
+      ownerAvatarKey: "avatar_pilot",
+      isOwn: true,
     };
     const updated = mergeOverlapping(get().territories, territory);
     const totalArea = updated.reduce((s, ter) => s + ter.area, 0);
@@ -176,20 +223,34 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (session?.user) {
       const { data, error } = await supabase
         .from("territories")
-        .select("*")
-        .eq("user_id", session.user.id)
+        .select("*, profiles:user_id(username, avatar_url, avatar_key)")
         .order("created_at", { ascending: true });
 
       if (data && !error && data.length > 0) {
-        const territories: Territory[] = data.map((row: any) => ({
-          id: row.id,
-          polygon: row.polygon as LatLng[],
-          area: row.area,
-          distance: row.distance,
-          duration: row.duration,
-          createdAt: new Date(row.created_at).getTime(),
-          color: row.color || "rgba(0, 240, 255, 0.25)",
-        }));
+        const territories: Territory[] = data
+          .map((row: any) => {
+            const polygon = normalizeStoredPolygon(row.polygon);
+            if (polygon.length < 3) {
+              return null;
+            }
+
+            return {
+              id: row.id,
+              polygon,
+              area: computePolygonArea(polygon),
+              distance: row.distance,
+              duration: row.duration,
+              createdAt: new Date(row.created_at).getTime(),
+              isOwn: row.user_id === session.user.id,
+              ownerUsername: row.profiles?.username ?? "",
+              ownerAvatarUrl: row.profiles?.avatar_url ?? "",
+              ownerAvatarKey: row.profiles?.avatar_key ?? "avatar_pilot",
+              color: row.user_id === session.user.id
+                ? "rgba(0, 232, 255, 0.25)"
+                : row.color ?? "rgba(180, 100, 255, 0.25)",
+            };
+          })
+          .filter((t): t is Territory => t !== null);
         const totalArea = territories.reduce((s, t) => s + t.area, 0);
         set({ territories, totalArea });
         // Also cache locally
@@ -202,7 +263,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const territories: Territory[] = JSON.parse(raw);
+        const territories: Territory[] = JSON.parse(raw).map((t: any) => ({
+          ...t,
+          ownerUsername: t.ownerUsername ?? "",
+          ownerAvatarUrl: t.ownerAvatarUrl ?? "",
+          ownerAvatarKey: t.ownerAvatarKey ?? "avatar_pilot",
+          isOwn: t.isOwn ?? true,
+        }));
         const totalArea = territories.reduce((s, t) => s + t.area, 0);
         set({ territories, totalArea });
       }

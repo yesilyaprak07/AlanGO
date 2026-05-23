@@ -10,7 +10,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ImageBackground, StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 import { Colors } from "@/constants/colors";
 import { AuthProvider } from "@/lib/auth";
 
@@ -80,18 +80,16 @@ export default function RootLayout() {
 
   if (!fontsLoaded) {
     return (
-      <ImageBackground
-        source={require("@/assets/images/splash-icon.png")}
-        resizeMode="cover"
-        style={styles.container}
-      />
+      <View style={styles.loadingContainer}>
+        <Image source={require("@/assets/images/splash-icon.png")} style={styles.splashImage} resizeMode="cover" />
+      </View>
     );
   }
 
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <GestureHandlerRootView style={styles.container}>
+        <GestureHandlerRootView style={styles.appContainer}>
           <RootLayoutNav />
         </GestureHandlerRootView>
       </QueryClientProvider>
@@ -100,8 +98,17 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  appContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "#000000",
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  splashImage: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
   },
 });
