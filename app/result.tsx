@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
-  Platform,
   Share,
   Animated,
 } from "react-native";
@@ -124,8 +123,8 @@ export default function ResultScreen() {
           <MapView
             ref={mapRef}
             style={StyleSheet.absoluteFillObject}
-            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-            customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
+            provider={PROVIDER_GOOGLE}
+            customMapStyle={darkMapStyle}
             scrollEnabled={false}
             zoomEnabled={false}
             rotateEnabled={false}

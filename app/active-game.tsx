@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -452,8 +452,8 @@ export default function ActiveGameScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-        customMapStyle={Platform.OS === "android" ? darkMapStyle : undefined}
+        provider={PROVIDER_GOOGLE}
+        customMapStyle={darkMapStyle}
         initialRegion={initialRegion}
         showsCompass={false}
         showsScale={false}
